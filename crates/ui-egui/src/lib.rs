@@ -71,14 +71,17 @@ pub mod marks {
 }
 mod content_ui;
 mod link_ui;
+pub use cert_ui::CertDraft;
 pub use create_ui::Clip;
 pub use link_ui::{LinkDraft, LinkKind, ViewFit};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
+pub use redact_sets_ui::CodeSetsDraft;
 pub use sign_ui::{
     DigitalIdEntry, GraphicChoice, PinField, SigProps, SigPropsTab, SignDraft, SignStep, SignedComparison, TokenDraft,
     property_rows as signature_property_rows,
 };
-pub use submit_ui::SubmitDraft;
+pub use submit_ui::{Sender as SubmitSender, SubmitDraft};
+pub use trust_ui::TrustDraft;
 mod autoscroll;
 mod bidi;
 pub mod bulk_fields;
@@ -109,7 +112,9 @@ pub mod timestamp_ui;
 pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
 pub mod screen_capture;
-pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
+pub use redact_ui::{
+    HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft, toggle_code as toggle_redaction_code,
+};
 pub mod i18n;
 
 /// [`PdfCraftApp::date_text`] for callers that already borrow other parts of the app.
@@ -128,14 +133,17 @@ pub(crate) fn date_text_for_pdf(session: &Session) -> Result<String, String> {
 /// The longest author name kept (Preferences ▸ Identity, restored settings).
 pub(crate) const MAX_AUTHOR_CHARS: usize = 200;
 
+mod cert_ui;
 pub mod portable;
 mod protect;
 mod recovery;
 #[cfg(target_arch = "wasm32")]
 mod recovery_web;
+mod redact_sets_ui;
 #[cfg(not(target_arch = "wasm32"))]
 mod system_fonts;
 pub mod theme;
+mod trust_ui;
 pub mod updates;
 mod wheel_pager;
 mod widgets;
@@ -361,6 +369,10 @@ pub enum Dialog {
     AutotagSummary,
     /// Use guided actions ▸ Make accessible.
     MakeAccessible,
+    /// Protect → Encrypt with certificate (recipients and their permissions).
+    ProtectCertificates,
+    /// Redact → Redaction code sets (create, edit, import and export saved sets).
+    RedactCodeSets,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -670,6 +682,14 @@ pub struct PdfCraftApp {
     pub number_draft: NumberDraft,
     /// Protect Using Password dialog state.
     pub protect_draft: protect::ProtectDraft,
+    /// Preferences → Security → Trust Manager: what is being typed.
+    pub trust_draft: trust_ui::TrustDraft,
+    /// Encrypt with certificate: the recipients and their permissions while the dialog is open.
+    pub cert_draft: cert_ui::CertDraft,
+    /// Redaction code sets: the set being edited.
+    pub code_sets_draft: redact_sets_ui::CodeSetsDraft,
+    /// Sends a form submission (tests swap in a mock; `None` uses the network).
+    pub submit_sender: Option<submit_ui::Sender>,
     /// Set Page Boxes dialog state.
     pub boxes_draft: pageboxes::BoxesDraft,
     /// Header & footer / watermark / background dialog state.
@@ -920,6 +940,10 @@ impl PdfCraftApp {
             last_opened_url: None,
             pending_link: None,
             protect_draft: Default::default(),
+            trust_draft: Default::default(),
+            cert_draft: Default::default(),
+            code_sets_draft: Default::default(),
+            submit_sender: None,
             boxes_draft: Default::default(),
             marks_draft: Default::default(),
             export_draft: Default::default(),
@@ -1566,6 +1590,7 @@ impl PdfCraftApp {
             "javascript": self.session.javascript(),
             // Trust Manager ▸ attachments: the user's allow/deny lists.
             "attachment_trust": self.session.attachment_trust().to_settings(),
+            "redaction_code_sets": pdfcraft_engine::redaction_sets::code_sets_json(self.session.redaction_code_sets()),
             "actions": actions_ui::encode(&self.custom_actions),
             "combine_columns": self.combine_columns.to_json(),
             "comments_panel_closed": self.comments_panel_closed,
@@ -1727,6 +1752,12 @@ impl PdfCraftApp {
             }
         }
         // Untrusted settings: bad entries are skipped and the lists capped.
+        if let Some(sets) = v.get("redaction_code_sets") {
+            let skipped = self.session.restore_redaction_code_sets(sets);
+            if skipped > 0 {
+                log::warn!("redaction code sets: {skipped} couldn't be read and were dropped");
+            }
+        }
         if v.get("attachment_trust").is_some() {
             self.session.set_attachment_trust(pdfcraft_engine::attachment_trust::AttachmentTrust::from_settings(&v["attachment_trust"]));
         }
@@ -1856,6 +1887,23 @@ impl PdfCraftApp {
                     "user-guide" => Some(Dialog::UserGuide),
                     "split" => Some(Dialog::Split),
                     "protect" => Some(Dialog::Protect),
+                    "protect-certificates" => {
+                        self.cert_draft = Default::default();
+                        Some(Dialog::ProtectCertificates)
+                    }
+                    "redaction-code-sets" => {
+                        self.code_sets_draft = Default::default();
+                        Some(Dialog::RedactCodeSets)
+                    }
+                    "trust-manager" => {
+                        self.prefs_ui.page = crate::prefs_ui::Page::Security;
+                        self.prefs_ui.query.clear();
+                        Some(Dialog::Preferences)
+                    }
+                    "document-actions" => {
+                        self.open_document_actions();
+                        self.dialog
+                    }
                     "page-boxes" => Some(Dialog::PageBoxes),
                     "header-footer" => Some(Dialog::Marks(pdfcraft_engine::MarkKind::HeaderFooter)),
                     "watermark" => Some(Dialog::Marks(pdfcraft_engine::MarkKind::Watermark)),

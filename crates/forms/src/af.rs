@@ -827,6 +827,35 @@ pub fn keystroke(f: &Format, field: &str, value: &str) -> Result<String, String>
     }
 }
 
+/// The Keystroke event while typing (`event.willCommit` false): can `proposed`, the text the
+/// field would hold after a keystroke or paste, still become a value of the format? Letters in a
+/// number, a twelfth digit in a phone number or a letter where a mask wants a digit are refused,
+/// as Acrobat's AF keystroke functions refuse them; dates and times are checked on commit only.
+pub fn keystroke_partial(f: &Format, proposed: &str) -> bool {
+    let digits = proposed.chars().filter(char::is_ascii_digit).count();
+    let only = |allowed: &str| proposed.chars().all(|c| c.is_ascii_digit() || allowed.contains(c));
+    match f {
+        Format::None | Format::Date(_) | Format::Time(_) => true,
+        Format::Number { .. } | Format::Percent { .. } => !proposed.chars().any(char::is_alphabetic),
+        Format::Special(0) => only("") && digits <= 5,
+        Format::Special(1) => only("- ") && digits <= 9,
+        Format::Special(2) => only(" ()-.+") && digits <= 11,
+        Format::Special(_) => only("- ") && digits <= 9,
+        Format::Mask(m) => {
+            // Typed literals (the mask's own `-`, `(`…) are optional; the rest fills the slots.
+            let slots: Vec<char> = m.chars().filter(|k| matches!(k, '9' | 'A' | 'O' | 'X')).collect();
+            let typed: Vec<char> = proposed.chars().filter(|c| !m.contains(*c) || c.is_alphanumeric()).collect();
+            typed.len() <= slots.len()
+                && typed.iter().zip(&slots).all(|(c, k)| match k {
+                    '9' => c.is_ascii_digit(),
+                    'A' => c.is_alphabetic(),
+                    'O' => c.is_alphanumeric(),
+                    _ => true,
+                })
+        }
+    }
+}
+
 /// The Validate event: `Err` with Acrobat's message when the value is out of range.
 pub fn validate(v: &Validate, value: &str) -> Result<(), String> {
     let Validate::Range { min, max } = v else { return Ok(()) };
@@ -1045,6 +1074,22 @@ mod tests {
         assert!(keystroke(&Format::Special(0), "Zip", "1234").is_err());
         assert_eq!(format_value(&Format::Mask("AA-9999".into()), "ab1234"), "ab-1234");
         assert!(keystroke(&Format::Mask("AA-9999".into()), "Code", "a11234").is_err());
+    }
+
+    #[test]
+    fn keystrokes_while_typing_follow_the_format() {
+        let money = Format::Number { decimals: 2, sep: 0, neg: 0, currency: "$".into(), prepend: true };
+        assert!(keystroke_partial(&money, "-1,234.5") && keystroke_partial(&money, "$12") && !keystroke_partial(&money, "12a"));
+        assert!(keystroke_partial(&Format::Special(0), "1234") && !keystroke_partial(&Format::Special(0), "123456"));
+        assert!(!keystroke_partial(&Format::Special(0), "12-3"));
+        assert!(keystroke_partial(&Format::Special(2), "(555) 123-") && !keystroke_partial(&Format::Special(2), "555x"));
+        let mask = Format::Mask("AA-9999".into());
+        assert!(keystroke_partial(&mask, "ab-12") && keystroke_partial(&mask, "ab12") && !keystroke_partial(&mask, "a1"));
+        assert!(!keystroke_partial(&mask, "ab-123456"));
+        assert!(keystroke_partial(&Format::Date("mm/dd/yyyy".into()), "anything"));
+        // Hostile input: long, odd characters.
+        assert!(!keystroke_partial(&Format::Special(3), &"9".repeat(100_000)));
+        assert!(keystroke_partial(&Format::None, "\u{202E}\0"));
     }
 
     #[test]

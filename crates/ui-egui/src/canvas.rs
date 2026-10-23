@@ -3103,6 +3103,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form, today) {
         view.pending_edit = Some(e);
     }
+    crate::forms_ui::after_input(view, &form);
     if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {
         view.pending_edit = Some(e);
     }
@@ -3257,9 +3258,16 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             crate::forms_ui::FormNotice::NoAction(name) => app.notify_fmt("{name} has no action", &[("name", &name)]),
         }
     }
+    app.check_field_keystroke(index);
+    // Field triggers: Mouse Down, Focus, Blur, Enter and Exit, then a push button's own first
+    // action, then Mouse Up (the rest of a button's chain).
+    let (ups, others): (Vec<_>, Vec<_>) =
+        std::mem::take(&mut app.views[index].forms.fires).into_iter().partition(|f| f.trigger == pdfcraft_engine::FieldTrigger::MouseUp);
+    app.fire_field_triggers(index, others);
     if let Some((name, action)) = app.views[index].forms.button.take() {
         run_button(app, index, &name, action);
     }
+    app.fire_field_triggers(index, ups);
     quick_bar(app, avail, ui);
 }
 

@@ -1370,11 +1370,20 @@ impl Automation {
         let list: Vec<Value> = found
             .iter()
             .map(|(p, c)| {
+                use pdfcraft_engine::detect::Kind;
                 let kind = match c.kind {
-                    pdfcraft_engine::detect::Kind::Text => "text",
-                    pdfcraft_engine::detect::Kind::CheckBox => "checkbox",
+                    Kind::Text => "text",
+                    Kind::CheckBox => "checkbox",
+                    Kind::Comb { .. } => "comb",
+                    Kind::Radio { .. } => "radio",
                 };
-                json!({ "page": p + 1, "kind": kind, "name": c.name, "rect": c.rect.map(|v| (v * 100.0).round() / 100.0) })
+                let mut v = json!({ "page": p + 1, "kind": kind, "name": c.name, "rect": c.rect.map(|v| (v * 100.0).round() / 100.0) });
+                match &c.kind {
+                    Kind::Comb { cells } => v["cells"] = json!(cells),
+                    Kind::Radio { export, .. } => v["export"] = json!(export),
+                    _ => {}
+                }
+                v
             })
             .collect();
         if a.opt_bool("add")?.unwrap_or(true) && !found.is_empty() {
@@ -1464,6 +1473,35 @@ impl Automation {
         Ok(json!({
             "field": a.str("field")?, "trigger": tid, "ran": o.ran, "skipped": o.skipped, "alerts": o.alerts,
             "console": o.console, "errors": o.errors, "requests": reqs, "menu": o.menu,
+        }))
+    }
+
+    /// `form_keystroke`: what typing `change` over the characters `sel` of text field `field`
+    /// would do (the Keystroke event while typing, before the value is committed).
+    pub(crate) fn form_keystroke(&mut self, a: &Args) -> Result<Value> {
+        let field = a.str("field")?;
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let current = doc.form.iter().find(|f| f.name == field).map(|f| f.value.first().cloned().unwrap_or_default()).unwrap_or_default();
+        let value = a.opt_str("value")?.map_or(current, str::to_string);
+        let change = a.opt_str("change")?.unwrap_or_default();
+        let len = value.chars().count();
+        let sel = match a.get("sel") {
+            None => len..len,
+            Some(_) => {
+                let v = a.opt_ints("sel")?.unwrap_or_default();
+                let [start, end] = v.as_slice() else {
+                    return Err(ToolError::InvalidArgs("sel is [start, end] (character positions)".into()));
+                };
+                let clamp = |n: i64| usize::try_from(n.max(0)).unwrap_or(0).min(len);
+                clamp(*start)..clamp(*end).max(clamp(*start))
+            }
+        };
+        let o = self.session.field_keystroke(id, field, &value, change, sel.clone()).map_err(failed)?;
+        let proposed: String = value.chars().take(sel.start).chain(o.change.chars()).chain(value.chars().skip(sel.end)).collect();
+        Ok(json!({
+            "field": field, "accepted": o.rc, "change": o.change, "result": if o.rc { proposed } else { value },
+            "checked_by": o.checked_by, "alerts": o.alerts, "console": o.console, "errors": o.errors,
         }))
     }
 

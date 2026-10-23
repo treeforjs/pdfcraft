@@ -2882,3 +2882,104 @@ compare-page	Moved	移動
 	{n} addresses were not contacted because of Internet access settings.	インターネットアクセスの設定により、{n} 件のアドレスには接続しませんでした。
 	{n} certificates added to your trusted certificates.	{n} 件の証明書を信頼済み証明書に追加しました。
 	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	署名者の証明書チェーンと失効状態を文書に追加し、証明書の期限が切れた後も署名を確認できるようにします。
+# Field triggers, document actions, certificate security, Trust Manager, redaction code sets and locales.
+	Add at least one recipient certificate.	受信者の証明書を 1 つ以上追加してください。
+	Add code	コードを追加
+	Add recipient	受信者を追加
+	Add recipient…	受信者を追加…
+	Add site	サイトを追加
+	Add type	種類を追加
+	All locales	すべての地域
+	Allow changing the security settings (and everything else)	セキュリティ設定の変更を許可（ほかのすべても許可）
+	Always allow	常に許可
+	At most {n} recipients.	受信者は最大 {n} 人です。
+	Attach the saved form data to the email	保存したフォームデータをメールに添付してください
+	Australia	オーストラリア
+	Bcc	BCC
+	Canada	カナダ
+	Cc	CC
+	Certificate or digital ID	証明書またはデジタル ID
+	Certificate security will be applied when you save	証明書セキュリティは保存時に適用されます
+	Choose a saved set or make a new one.	保存済みのセットを選ぶか、新しく作成してください。
+	Choose codes	コードを選択
+	Code	コード
+	Code set file	コードセットファイル
+	Delete set	セットを削除
+	Deleted {name}.	{name} を削除しました。
+	Document Actions	文書のアクション
+	Document Did Print	文書の印刷後
+	Document Did Save	文書の保存後
+	Document Will Close	文書を閉じる前
+	Document Will Print	文書の印刷前
+	Document Will Save	文書の保存前
+	Document actions…	文書のアクション…
+	Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.	各スクリプトは、文書を閉じる前、保存時、印刷時に実行されます。スクリプトから別の保存や印刷を始めることはできません。
+	Encrypt with certificate…	証明書で暗号化…
+	Export code sets	コードセットを書き出す
+	Extension, such as zip	拡張子（例: zip）
+	France	フランス
+	Germany	ドイツ
+	Import code sets	コードセットを読み込む
+	Imported {names}.	{names} を読み込みました。
+	Import…	読み込み…
+	Include subdomains	サブドメインを含める
+	India	インド
+	International	国際
+	Japan	日本
+	Lock the document after signing	署名後に文書をロック
+	Locked fields become read-only once the field is signed; a locked document then allows no changes.	ロックしたフィールドは、このフィールドに署名すると読み取り専用になります。ロックした文書はその後変更できません。
+	Mark as read-only all fields	すべてのフィールドを読み取り専用にする
+	Mark as read-only all fields except these	これら以外のすべてのフィールドを読み取り専用にする
+	Mark as read-only just these fields	これらのフィールドだけを読み取り専用にする
+	Mark every pattern of this locale	この地域のすべてのパターンをマーク
+	Never open	開かない
+	New set	新しいセット
+	No recipients yet. Add a certificate for each person who may open the document.	受信者はまだいません。文書を開けるすべての人について証明書を追加してください。
+	No site rules yet.	サイトのルールはまだありません。
+	Nobody can change or remove this security later unless a recipient may change the security.	セキュリティを変更できる受信者がいないと、このセキュリティは後で誰も変更・解除できません。
+	None yet	まだありません
+	Nothing happens	何もしない
+	Only the recipients can open the document, each with the permissions you give them. It's applied when you save.	文書を開けるのは受信者だけで、それぞれに指定した権限が与えられます。保存時に適用されます。
+	PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach.	PdfCraft 自体はメールを送信しません。メールアプリを開き、添付用にデータを保存します。
+	Permissions for {name}	{name} の権限
+	Programs and scripts are refused and plain documents open; other types ask. Your lists override the built-in ones.	プログラムとスクリプトは拒否され、通常の文書は開きます。その他の種類は確認します。ユーザーのリストが組み込みのリストより優先されます。
+	Recipients	受信者
+	Redaction code sets	墨消しコードセット
+	Redaction code sets…	墨消しコードセット…
+	Remove the rule for {host}	{host} のルールを削除
+	Remove this code	このコードを削除
+	Rules for web sites that links, scripts and form submissions reach. Used when internet access follows the site rules.	リンク、スクリプト、フォーム送信がアクセスする Web サイトのルールです。インターネットアクセスがサイトのルールに従うときに使われます。
+	Save set	セットを保存
+	Saved sets	保存済みのセット
+	Saved {name}.	{name} を保存しました。
+	Set name	セット名
+	Signed	署名済み
+	Sites	サイト
+	Take .{ext} off the list	.{ext} をリストから外す
+	That recipient is already on the list.	この受信者はすでにリストにあります。
+	The file holds {n} certificates; add each recipient from its own file.	このファイルには証明書が {n} 個あります。受信者ごとに別のファイルから追加してください。
+	The file is larger than {n} MB.	ファイルが {n} MB を超えています。
+	The file is too large for a code set file.	コードセットファイルとしては大きすぎます。
+	The form has no other fields.	このフォームにはほかのフィールドがありません。
+	The form was sent to {host}, which filled in its answer.	フォームを {host} に送信し、回答が入力されました。
+	The form was sent to {host}; its answer couldn't be imported: {e}	フォームを {host} に送信しましたが、回答を読み込めませんでした: {e}
+	The form was sent to {host}; its answer was too large to import.	フォームを {host} に送信しましたが、回答が大きすぎて読み込めません。
+	This form wants to email its data:	このフォームはデータをメールで送信しようとしています:
+	This isn't a certificate (.cer, .crt, .pem, .der) or digital ID (.p12, .pfx).	証明書（.cer、.crt、.pem、.der）でもデジタル ID（.p12、.pfx）でもありません。
+	To	宛先
+	Trust Manager	信頼の管理
+	Trust Manager…	信頼の管理…
+	Type the digital ID's password first (or choose a certificate file).	先にデジタル ID のパスワードを入力してください（または証明書ファイルを選択してください）。
+	United Kingdom	イギリス
+	United States	アメリカ合衆国
+	When signed:	署名時:
+	Your own codes to cite on redactions, offered in Redaction Properties beside the built-in sets.	墨消しに記載する独自のコード。墨消しのプロパティで組み込みのセットと並んで表示されます。
+	and subdomains	とサブドメイン
+	this host only	このホストのみ
+	{n} chosen	{n} 個を選択
+	German Tax Identification Numbers	ドイツの納税者番号
+	Indian Aadhaar Numbers	インドの Aadhaar 番号
+	Indian PAN Numbers	インドの PAN 番号
+	Australian Tax File Numbers	オーストラリアの納税者番号（TFN）
+	Australian Medicare Numbers	オーストラリアの Medicare 番号
+	Australian Business Numbers	オーストラリアの事業者番号（ABN）

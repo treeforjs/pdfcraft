@@ -665,17 +665,39 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "redact_codes",
             "List redaction codes",
-            "The built-in redaction code sets (us-foia: U.S. FOIA exemptions, 5 U.S.C. 552(b); us-privacy-act: U.S. Privacy Act exemptions, 5 U.S.C. 552a) with each code and a short description. Pass code_set and codes to redact_mark to show codes on the boxes.",
+            "The redaction code sets with each code and a short description: the built-in ones (us-foia: U.S. FOIA exemptions, 5 U.S.C. 552(b); us-privacy-act: U.S. Privacy Act exemptions, 5 U.S.C. 552a), then the user's own (custom: true, id = name; see redact_code_set_save). Pass code_set (an id or a set's name) and codes to redact_mark to show codes on the boxes.",
         )
         .ro()
-        .with(schema(json!({ "code_set": { "type": "string", "enum": ["us-foia", "us-privacy-act"] } }), &[])),
+        .with(schema(json!({ "code_set": { "type": "string", "description": "a built-in id (us-foia, us-privacy-act) or the name of one of your sets" } }), &[])),
+        t(
+            "redact_code_set_save",
+            "Save a redaction code set",
+            "Redaction code sets: add one of your own code sets, or replace yours of the same name (ignoring case; built-in names are refused). codes: up to 500, each a string or { code, description } (code: one line of at most 64 characters; description: at most 300). The desktop app keeps your sets with its settings; here they last for the session (see redact_code_sets_file to keep them in a file). Returns name, codes and replaced.",
+        )
+        .cmd("redact.code_sets")
+        .with(schema(
+            json!({ "name": { "type": "string", "maxLength": 64 }, "codes": { "type": "array", "maxItems": 500, "items": { "anyOf": [
+                { "type": "string" },
+                { "type": "object", "properties": { "code": { "type": "string" }, "description": { "type": "string" } }, "required": ["code"] } ] } } }),
+            &["name", "codes"],
+        )),
+        t("redact_code_set_delete", "Delete a redaction code set", "Delete one of your redaction code sets by name (ignoring case). Built-in sets can't be deleted.")
+            .cmd("redact.code_sets")
+            .with(schema(json!({ "name": { "type": "string" } }), &["name"])),
+        t(
+            "redact_code_sets_file",
+            "Import or export code sets",
+            "mode import: read the code sets in a JSON file ({\"code_sets\": [{\"name\": …, \"codes\": [{\"code\": …, \"description\": …}]}]}, or one set; at most 1 MiB and 64 sets) and add them to yours (a set of the same name is replaced; a bad file changes nothing). mode export: write your sets to path in that format. Returns imported (names) or path.",
+        )
+        .cmd("redact.code_sets")
+        .with(schema(json!({ "mode": { "type": "string", "enum": ["import", "export"] }, "path": { "type": "string" } }), &["mode", "path"])),
         t(
             "redact_patterns",
             "List Search & Redact patterns",
-            "The Search & Redact patterns by locale set (intl, en-US, en-GB, en-CA, fr-FR, ja-JP) with their ids and labels. A locale set passed to redact_mark also includes the intl patterns.",
+            "The Search & Redact patterns by locale set (intl, en-US, en-GB, en-CA, fr-FR, de-DE, en-IN, en-AU, ja-JP) with their ids and labels. A locale set passed to redact_mark also includes the intl patterns. Dates are found in English, French, German, Spanish, Italian, Portuguese and Dutch; IBANs need their country's length and a valid checksum.",
         )
         .ro()
-        .with(schema(json!({ "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "ja-JP"] } }), &[])),
+        .with(schema(json!({ "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "de-DE", "en-IN", "en-AU", "ja-JP"] } }), &[])),
         t("redact_clear", "Remove redaction marks", "Remove every redaction mark without applying it. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
@@ -1190,6 +1212,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Change the attachment trust policy",
             "Change your attachment allow and deny lists (Trust Manager ▸ attachments). allow / deny replace a list; add_allow / add_deny add extensions (taking them off the other list); remove takes extensions off both; reset starts from empty lists first. Extensions may be written .EXE, exe or *.exe; letters, digits and - _ + ~ $ only, at most 32 characters and 256 per list; one extension can't be in both. Allowing a built-in blocked type such as exe makes it open. The desktop app keeps the lists in its settings; a headless session keeps them until it ends. Returns the policy as trust_attachments_get does.",
         )
+        .cmd("app.trust_manager")
         .with(schema(
             json!({
                 "allow": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
@@ -1622,7 +1645,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("trust_urls_get", "Internet access settings", "Read the policy for internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): mode (allow-all, block-all or custom), default_action for hosts on no rule in custom mode (allow, block or ask), and rules [{host, action, subdomains}]. It governs links' URI actions, Submit Form and scripts' app.launchURL/submitForm. The desktop app keeps it with its settings; here it lasts for the session.")
             .ro()
             .with(schema(json!({}), &[])),
-        t("trust_urls_set", "Change internet access settings", "Change the internet access policy: mode (allow-all, block-all, custom), default_action (allow, block, ask), rules (replace the whole list), remove (hosts to drop), then add (rules to add or replace). A rule's host is a name (matches its subdomains unless subdomains: false), *.name, an IP literal (matches only itself) or a whole address; it is stored lowercase, without a trailing dot, port or user name, internationalised names in their xn-- form. Nothing changes unless every argument is valid. Returns the policy and the hosts removed.").with(schema(
+        t("trust_urls_set", "Change internet access settings", "Change the internet access policy: mode (allow-all, block-all, custom), default_action (allow, block, ask), rules (replace the whole list), remove (hosts to drop), then add (rules to add or replace). A rule's host is a name (matches its subdomains unless subdomains: false), *.name, an IP literal (matches only itself) or a whole address; it is stored lowercase, without a trailing dot, port or user name, internationalised names in their xn-- form. Nothing changes unless every argument is valid. Returns the policy and the hosts removed.").cmd("app.trust_manager").with(schema(
             json!({
                 "mode": { "type": "string", "enum": ["allow-all", "block-all", "custom"] },
                 "default_action": { "type": "string", "enum": ["allow", "block", "ask"] },
@@ -1723,6 +1746,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Protect with certificates",
             "Encrypt the document for recipient certificates (public-key security, ISO 32000-2 §7.6.5, adbe.pkcs7.s5): it then opens only with a recipient's digital ID (doc_open with certificate). Each recipient is a certificate file (.cer/.crt/.pem/.der) or a digital ID (.p12/.pfx, with password; only its certificate is used) with its own permissions; change_security makes a recipient owner-equivalent (may change or remove security, everything allowed). Include yourself with change_security, or nobody can change the security later. RSA certificates only. Applied by the next doc_save (a full rewrite). Undoable.",
         )
+        .cmd("protect.certificate")
         .with(schema(
             json!({
                 "doc": doc(),
@@ -2075,8 +2099,10 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc(), "name": { "type": "string", "minLength": 1 }, "script": { "type": "string" } }), &["doc", "name"])),
         t("js_document_actions", "Document actions", "Set Document Actions: the JavaScript each document trigger runs (will_close, will_save, did_save, will_print, did_print; script null when none). doc_save, doc_print and doc_close run them.")
             .ro()
+            .cmd("tools.document_actions")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("js_set_document_action", "Set a document action", "Set the JavaScript a document trigger runs (will_close, will_save, did_save, will_print, did_print), or remove it (script omitted). Undoable.")
+            .cmd("tools.document_actions")
             .with(schema(json!({ "doc": doc(), "trigger": { "type": "string", "enum": ["will_close", "will_save", "did_save", "will_print", "did_print"] }, "script": { "type": "string" } }), &["doc", "trigger"])),
         t("js_page_actions", "Page actions", "Page Properties ▸ Actions: the JavaScript each page runs on page_open (when it becomes the current page) and page_close (when it stops being it). With page, both triggers of that page (script null when none); without, every trigger that has a script.")
             .ro()
@@ -2292,7 +2318,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_compare_mark", "Mark differences as comments", "Add the differences from other (older) to doc (newer) as comments in doc: highlights over replaced (blue) and inserted (green) text, notes where text was deleted (red), authored Compare. Undoable. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" } }), &["doc", "other"])),
-        t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes) and name each field from its label. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind, name and rect (points, origin bottom-left).")
+        t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes, rows of touching cells as comb fields, small circles as radio groups named from their question with each choice's export value from its label, and the empty cells of ruled tables named from their column heading and row) and name each field from its label. Scanned forms need text recognition (OCR) first. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind (text, check, comb with cells, radio with export), name and rect (points, origin bottom-left).")
             .cmd("form.detect")
             .with(schema(json!({ "doc": doc(), "pages": pages("to look at (default: all)"), "add": { "type": "boolean" } }), &["doc"])),
         t("form_actions", "Field actions", "Field Properties ▸ Actions: the field's actions, each with its trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur), in the order they run (a trigger's later actions follow its /Next chain). Actions PdfCraft doesn't edit are listed as other (their /S type).")
@@ -2314,6 +2340,13 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(
                 json!({ "doc": doc(), "field": { "type": "string" }, "trigger": { "type": "string", "enum": ["mouse_up", "mouse_down", "mouse_enter", "mouse_exit", "on_focus", "on_blur"] } }),
                 &["doc", "field", "trigger"],
+            )),
+        t("form_keystroke", "Check a keystroke", "What typing would do in a text field before the value is committed (the Keystroke event with willCommit false): change replaces the characters sel [start, end] (character positions; default: the end) of value (default: the field's value). The field's custom Keystroke JavaScript decides when it has one and JavaScript is on (event.change may be rewritten, event.rc refuses); otherwise its number, percent, special or arbitrary-mask format does. Nothing changes. Returns accepted, change, result (the text after the keystroke), checked_by (script, format or none), alerts, console and errors.")
+            .ro()
+            .with(schema(
+                json!({ "doc": doc(), "field": { "type": "string" }, "change": { "type": "string" }, "value": { "type": "string" },
+                    "sel": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 } }),
+                &["doc", "field"],
             )),
         t("edit_keep_tags", "Keep tags on edit", "Keep a tagged document's structure tree in step with content edits (on by default), as Acrobat does: text edited in place keeps its marked content and element (an ActualText that spelled the old words is removed); a rewritten paragraph, or an added item that is moved, retyped or replaced, takes over the tag of the content it replaced; new text and images get new P and Figure elements next to the nearest tagged content (figures need alternate text: see accessibility_set_alt); new underlines become artifacts; deleted content, images and pages leave the tree, elements left empty go, and the parent tree is rebuilt, all in the edit's one undo step. The results of text_edit, image_edit, page_add_text, page_add_image, content_update, content_delete and page_delete then have a tags entry: pages, kept, adopted, added (page, element, role, mcid), artifacts, removed, pruned, actual_text_cleared, review_alt (figures whose image changed: check their alternate text), parent_tree and warnings. Set it with enabled, or read it; off, edits leave the tree as it was.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),

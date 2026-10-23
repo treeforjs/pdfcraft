@@ -108,6 +108,10 @@ pub struct Widget {
     pub hidden: bool,
     /// `/MK /R` as 0, 90, 180 or 270 degrees counterclockwise. Anything else is stored as 0.
     pub rotation: i64,
+    /// The triggers this widget has an action for (`/A`, `/AA` U D E X Fo Bl), as bits of
+    /// [`Trigger::bit`]: lets a viewer skip firing triggers that do nothing without reading
+    /// the actions.
+    pub triggers: u8,
 }
 
 /// A terminal form field.
@@ -785,6 +789,7 @@ fn walk(
                 locked: annot_flags & 128 != 0,
                 hidden: annot_flags & (2 | 32) != 0,
                 rotation: appearance::mk_rotation(doc, wd),
+                triggers: actions::trigger_bits(doc, wd),
             })
         })
         .collect();

@@ -268,12 +268,12 @@ fn submit_buttons_ask_then_send_or_save_the_data() {
     assert_eq!(std::fs::read_to_string(dir.join("order data.txt")).unwrap(), "name=Ada");
     assert!(requests.try_recv().is_err());
 
-    // An email address can't be sent to: the dialog says so and only saving is offered.
+    // An email address isn't sent to: the dialog says so and offers the email app instead.
     click_field(&mut h, "email");
     assert_eq!(h.state().dialog, Some(Dialog::SubmitForm));
     h.get_by_label_contains("PdfCraft doesn't send email");
-    h.get_by_label("Send").click();
-    h.run_steps(3);
-    assert!(requests.try_recv().is_err(), "Send is disabled");
+    assert!(h.query_by_label("Send").is_none(), "nothing is sent over the network");
+    h.get_by_label("Open email app");
+    assert!(requests.try_recv().is_err());
     assert_eq!(h.state().dialog, Some(Dialog::SubmitForm));
 }

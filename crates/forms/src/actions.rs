@@ -55,6 +55,11 @@ impl Trigger {
         Trigger::ALL.into_iter().find(|t| t.id() == id)
     }
 
+    /// This trigger's bit in [`crate::Widget::triggers`].
+    pub fn bit(self) -> u8 {
+        1 << Trigger::ALL.iter().position(|t| *t == self).unwrap_or(0)
+    }
+
     /// `event.name` for a script this trigger runs (Acrobat JavaScript's field events).
     pub fn event_name(self) -> &'static str {
         match self {
@@ -229,6 +234,13 @@ fn entry(wd: &Dict, aa: &Dict, t: Trigger) -> Option<Object> {
         None => wd.get(b"A").cloned().or_else(|| aa.get(b"U").cloned()),
         Some(k) => aa.get(k).cloned(),
     }
+}
+
+/// The triggers widget dictionary `wd` has an entry for, as [`Trigger::bit`]s (the entries are
+/// only looked up, not read: a viewer uses this to skip triggers with nothing to run).
+pub(crate) fn trigger_bits(doc: &Document, wd: &Dict) -> u8 {
+    let aa = wd.get(b"AA").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().cloned()).unwrap_or_default();
+    Trigger::ALL.into_iter().filter(|t| entry(wd, &aa, *t).is_some_and(|e| !matches!(e, Object::Null))).fold(0, |bits, t| bits | t.bit())
 }
 
 /// A widget's actions per trigger, in the tab's order.

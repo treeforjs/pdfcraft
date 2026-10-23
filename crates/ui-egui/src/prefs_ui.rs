@@ -435,6 +435,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
                     if page == Page::Signatures {
                         crate::sign_settings_ui::section(ui, app, t);
                     }
+                    if page == Page::Security {
+                        crate::trust_ui::section(ui, app, t);
+                    }
                 } else {
                     let found = search(&query);
                     if found.is_empty() {

@@ -117,6 +117,10 @@ impl PdfCraftApp {
                 self.protect_draft = Default::default();
                 self.dialog = Some(Dialog::Protect);
             }
+            "protect.certificate" => {
+                self.cert_draft = Default::default();
+                self.dialog = Some(Dialog::ProtectCertificates);
+            }
             "protect.remove" => {
                 if self.apply_edit(Edit::RemoveProtection) {
                     self.notify_tr("Security will be removed when you save");
@@ -313,6 +317,16 @@ impl PdfCraftApp {
                 self.dialog = Some(Dialog::DocumentJs);
             }
             "app.preferences" => self.dialog = Some(Dialog::Preferences),
+            "app.trust_manager" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Security;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
+            }
+            "tools.document_actions" => self.open_document_actions(),
+            "redact.code_sets" => {
+                self.code_sets_draft = Default::default();
+                self.dialog = Some(Dialog::RedactCodeSets);
+            }
             // Preferences ▸ General, where the interface language is chosen.
             "app.language" => {
                 self.prefs_ui.page = crate::prefs_ui::Page::General;

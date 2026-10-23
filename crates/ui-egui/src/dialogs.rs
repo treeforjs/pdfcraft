@@ -553,7 +553,8 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::RedactProps => {
                 let mut prefs = app.redact_prefs.clone();
-                let (ok, cancel) = crate::redact_ui::props_body(ui, &mut prefs, &t);
+                let custom = app.session.redaction_code_sets().to_vec();
+                let (ok, cancel) = crate::redact_ui::props_body(ui, &mut prefs, &custom, &t);
                 app.redact_prefs = prefs;
                 close = ok || cancel;
                 return;
@@ -739,6 +740,16 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::SubmitForm => {
                 close = crate::submit_ui::dialog(ui, app, &t);
+                return;
+            }
+            Dialog::ProtectCertificates => {
+                ui.set_width(620.0);
+                close = crate::cert_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::RedactCodeSets => {
+                ui.set_width(620.0);
+                close = crate::redact_sets_ui::body(ui, app, &t);
                 return;
             }
             Dialog::SignatureProperties => {
@@ -1326,10 +1337,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if bulk_field_props_now {
         close = app.apply_bulk_field_props();
     }
-    if field_props_now
-        && let Some(d) = app.field_props.take()
-        && let Some(props) = d.props()
-        && app.apply_edit(Edit::SetFieldProps { name: d.field.clone(), props: Box::new(props) })
+    let field_edit = if field_props_now { app.field_props.take().map(|d| (d.edits(), d)) } else { None };
+    if let Some((mut edits, d)) = field_edit
+        && !edits.is_empty()
+        && app.apply_edit(if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Change field properties".into(), edits } })
         && let Some(i) = app.active
     {
         // Keep the (possibly renamed) field selected.

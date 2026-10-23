@@ -277,8 +277,9 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             ToolSection {
                 title: "Advanced options",
                 items: &[
-                    item("Encrypt with certificate", "file-lock-2", "protect.certificate", Planned("M8")),
+                    item("Encrypt with certificate", "file-lock-2", "protect.certificate", Ready),
                     item("Security properties", "shield-check", "protect.properties", Ready),
+                    item("Trust Manager", "shield-check", "app.trust_manager", Ready),
                     item("Remove security", "lock-open", "protect.remove", Ready),
                 ],
             },
@@ -298,6 +299,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Redact pages", "file-x", "redact.pages", Ready),
                 item("Find text and redact", "file-search", "redact.search", Ready),
                 item("Set properties", "settings-2", "redact.properties", Ready),
+                item("Redaction code sets", "list-checks", "redact.code_sets", Ready),
                 item("Sanitize document", "sparkles", "redact.sanitize", Ready),
             ],
         }],

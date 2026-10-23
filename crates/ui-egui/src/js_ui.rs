@@ -3,7 +3,7 @@
 
 use egui::{Align, Layout};
 use pdfcraft_engine::js::{ActionSource, Answer, Dialogs, JsOutput, Question, Request};
-use pdfcraft_engine::{DocId, Edit, PageTrigger};
+use pdfcraft_engine::{DocId, DocTrigger, Edit, PageTrigger};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -481,6 +481,9 @@ pub enum ScriptTarget {
     Bookmark(Vec<usize>),
     /// A page (0-based): its Page Open and Page Close scripts.
     Page(usize),
+    /// The document: its Set Document Actions scripts (will close, will save, did save, will
+    /// print, did print).
+    Document,
 }
 
 /// The action editor's working copy. A bookmark has one script; a page has one per trigger
@@ -489,6 +492,8 @@ pub enum ScriptTarget {
 pub struct ActionScriptDraft {
     pub target: ScriptTarget,
     pub trigger: PageTrigger,
+    /// The document trigger shown ([`ScriptTarget::Document`]; [`DocTrigger::ALL`] order).
+    pub doc_trigger: DocTrigger,
     pub scripts: Vec<String>,
     /// The scripts as the document has them, to save only what changed.
     pub original: Vec<String>,
@@ -499,6 +504,7 @@ impl ActionScriptDraft {
         match self.target {
             ScriptTarget::Bookmark(_) => 0,
             ScriptTarget::Page(_) => PageTrigger::ALL.iter().position(|t| *t == self.trigger).unwrap_or(0),
+            ScriptTarget::Document => DocTrigger::ALL.iter().position(|t| *t == self.doc_trigger).unwrap_or(0),
         }
     }
 
@@ -523,6 +529,19 @@ impl ActionScriptDraft {
                     _ => Some(Edit::Batch { label: "Set page actions".into(), edits }),
                 }
             }
+            ScriptTarget::Document => {
+                let edits: Vec<Edit> = DocTrigger::ALL
+                    .iter()
+                    .zip(self.scripts.iter().zip(&self.original))
+                    .filter(|(_, (now, was))| now.trim() != was.trim())
+                    .map(|(t, (now, _))| Edit::SetDocumentAction { trigger: *t, script: (!now.trim().is_empty()).then(|| now.clone()) })
+                    .collect();
+                match edits.len() {
+                    0 => None,
+                    1 => edits.into_iter().next(),
+                    _ => Some(Edit::Batch { label: "Set document actions".into(), edits }),
+                }
+            }
         }
     }
 }
@@ -539,6 +558,7 @@ impl PdfCraftApp {
         self.action_script = Some(ActionScriptDraft {
             target: ScriptTarget::Bookmark(path),
             trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
             scripts: vec![current.clone()],
             original: vec![current],
         });
@@ -550,8 +570,31 @@ impl PdfCraftApp {
         let Some((_, id)) = self.active_ids() else { return };
         let Some(doc) = self.session.get(id) else { return };
         let scripts: Vec<String> = PageTrigger::ALL.iter().map(|t| doc.page_action(page, *t).unwrap_or_default()).collect();
-        self.action_script =
-            Some(ActionScriptDraft { target: ScriptTarget::Page(page), trigger: PageTrigger::Open, original: scripts.clone(), scripts });
+        self.action_script = Some(ActionScriptDraft {
+            target: ScriptTarget::Page(page),
+            trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
+            original: scripts.clone(),
+            scripts,
+        });
+        self.dialog = Some(crate::Dialog::ActionScript);
+    }
+
+    /// Set Document Actions: the active document's will close, will save, did save, will print
+    /// and did print scripts.
+    pub fn open_document_actions(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let actions = doc.document_actions();
+        let scripts: Vec<String> =
+            DocTrigger::ALL.iter().map(|t| actions.iter().find(|(x, _)| x == t).map(|(_, s)| s.clone()).unwrap_or_default()).collect();
+        self.action_script = Some(ActionScriptDraft {
+            target: ScriptTarget::Document,
+            trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
+            original: scripts.clone(),
+            scripts,
+        });
         self.dialog = Some(crate::Dialog::ActionScript);
     }
 
@@ -593,6 +636,11 @@ pub(crate) fn action_script_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &T
             crate::i18n::fmt(tl!("Page Actions: page {n}"), &[("n", &p.saturating_add(1).to_string())]),
             tl!("Page Open runs when the page becomes the current page; Page Close when another page does.").to_string(),
         ),
+        ScriptTarget::Document => (
+            tl!("Document Actions").to_string(),
+            tl!("Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.")
+                .to_string(),
+        ),
     };
     ui.label(egui::RichText::new(title).font(theme::semibold(18.0)));
     ui.label(egui::RichText::new(hint).small().color(t.text_muted));
@@ -607,6 +655,17 @@ pub(crate) fn action_script_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &T
                 let set = !d.scripts.get(PageTrigger::ALL.iter().position(|x| *x == tr).unwrap_or(0)).is_none_or(|s| s.trim().is_empty());
                 let label = if set { format!("{} ●", tl!(tr.label())) } else { tl!(tr.label()).to_string() };
                 ui.selectable_value(&mut d.trigger, tr, label);
+            }
+        });
+        ui.add_space(4.0);
+    }
+    if d.target == ScriptTarget::Document {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tl!("Trigger:"));
+            for (i, tr) in DocTrigger::ALL.into_iter().enumerate() {
+                let set = !d.scripts.get(i).is_none_or(|s| s.trim().is_empty());
+                let label = if set { format!("{} ●", tl!(tr.label())) } else { tl!(tr.label()).to_string() };
+                ui.selectable_value(&mut d.doc_trigger, tr, label);
             }
         });
         ui.add_space(4.0);

@@ -129,17 +129,39 @@ pub struct Event {
     pub value: String,
     pub change: String,
     pub will_commit: bool,
+    /// `event.selStart` / `event.selEnd`: the characters of `value` a keystroke replaces
+    /// (clamped to `value`'s length when the script reads them).
+    pub sel_start: usize,
+    pub sel_end: usize,
 }
 
 impl Event {
     /// A field event (`event.type` = "Field").
     pub fn field(name: &str, target: &str, value: &str) -> Event {
-        Event { name: name.into(), kind: "Field".into(), target: Some(target.into()), value: value.into(), change: String::new(), will_commit: true }
+        Event {
+            name: name.into(),
+            kind: "Field".into(),
+            target: Some(target.into()),
+            value: value.into(),
+            change: String::new(),
+            will_commit: true,
+            sel_start: 0,
+            sel_end: 0,
+        }
     }
 
     /// A document event (`event.type` = "Doc"), e.g. Open or WillSave.
     pub fn doc(name: &str) -> Event {
-        Event { name: name.into(), kind: "Doc".into(), target: None, value: String::new(), change: String::new(), will_commit: false }
+        Event {
+            name: name.into(),
+            kind: "Doc".into(),
+            target: None,
+            value: String::new(),
+            change: String::new(),
+            will_commit: false,
+            sel_start: 0,
+            sel_end: 0,
+        }
     }
 }
 
@@ -1109,6 +1131,13 @@ fn platform() -> &'static str {
     }
 }
 
+/// A selection index as a script sees it: at most the value's length (in UTF-16 units, as
+/// JavaScript counts), and small enough for a JavaScript number.
+fn sel(i: usize, value: &str) -> i32 {
+    let len = value.encode_utf16().count();
+    i32::try_from(i.min(len)).unwrap_or(i32::MAX)
+}
+
 fn event_object(ctx: &mut Context, e: &Event) -> JsObject {
     let target = e.target.as_ref().map_or(JsValue::null(), |t| field_object(ctx, t).into());
     ObjectInitializer::new(ctx)
@@ -1121,8 +1150,8 @@ fn event_object(ctx: &mut Context, e: &Event) -> JsObject {
         .property(js_string!("rc"), true, Attribute::all())
         .property(js_string!("target"), target, Attribute::all())
         .property(js_string!("targetName"), s(e.target.as_deref().unwrap_or("")), Attribute::all())
-        .property(js_string!("selStart"), 0, Attribute::all())
-        .property(js_string!("selEnd"), 0, Attribute::all())
+        .property(js_string!("selStart"), sel(e.sel_start, &e.value), Attribute::all())
+        .property(js_string!("selEnd"), sel(e.sel_end.max(e.sel_start), &e.value), Attribute::all())
         .property(js_string!("commitKey"), 0, Attribute::all())
         .property(js_string!("modifier"), false, Attribute::all())
         .property(js_string!("shift"), false, Attribute::all())

@@ -2,7 +2,10 @@
 //! credit card numbers, US Social Security numbers and dates, plus locale-specific sets (see
 //! [`LOCALES`]): US ZIP codes, UK postcodes and National Insurance numbers, Canadian postal codes
 //! and Social Insurance numbers, French social security numbers (NIR), Japanese postal codes and
-//! Individual Numbers, and IBANs. Each matcher works on a page's text as characters and returns
+//! Individual Numbers, German tax identification numbers, Indian Aadhaar and PAN numbers,
+//! Australian tax file, Medicare and business numbers, and IBANs (checked against each country's
+//! IBAN length). Dates are found with English, French, German, Spanish, Italian, Portuguese and
+//! Dutch month names. Each matcher works on a page's text as characters and returns
 //! character ranges; callers map them to glyphs and areas.
 //!
 //! Identifiers with a check digit (credit cards, SIN, NIR, My Number, IBAN) only match when it is
@@ -29,9 +32,15 @@ pub enum Pattern {
     JpPostal,
     JpMyNumber,
     Iban,
+    DeTaxId,
+    InAadhaar,
+    InPan,
+    AuTfn,
+    AuMedicare,
+    AuAbn,
 }
 
-pub const PATTERNS: [Pattern; 14] = [
+pub const PATTERNS: [Pattern; 20] = [
     Pattern::Phone,
     Pattern::Email,
     Pattern::CreditCard,
@@ -46,15 +55,24 @@ pub const PATTERNS: [Pattern; 14] = [
     Pattern::JpPostal,
     Pattern::JpMyNumber,
     Pattern::Iban,
+    Pattern::DeTaxId,
+    Pattern::InAadhaar,
+    Pattern::InPan,
+    Pattern::AuTfn,
+    Pattern::AuMedicare,
+    Pattern::AuAbn,
 ];
 
 /// Pattern sets by locale: (id, name). `intl` patterns apply everywhere and belong to every set.
-pub const LOCALES: [(&str, &str); 6] = [
+pub const LOCALES: [(&str, &str); 9] = [
     ("intl", "International"),
     ("en-US", "United States"),
     ("en-GB", "United Kingdom"),
     ("en-CA", "Canada"),
     ("fr-FR", "France"),
+    ("de-DE", "Germany"),
+    ("en-IN", "India"),
+    ("en-AU", "Australia"),
     ("ja-JP", "Japan"),
 ];
 
@@ -81,6 +99,12 @@ impl Pattern {
             Pattern::JpPostal => "Japanese Postal Codes",
             Pattern::JpMyNumber => "Japanese Individual Numbers (My Number)",
             Pattern::Iban => "Bank Account Numbers (IBAN)",
+            Pattern::DeTaxId => "German Tax Identification Numbers",
+            Pattern::InAadhaar => "Indian Aadhaar Numbers",
+            Pattern::InPan => "Indian PAN Numbers",
+            Pattern::AuTfn => "Australian Tax File Numbers",
+            Pattern::AuMedicare => "Australian Medicare Numbers",
+            Pattern::AuAbn => "Australian Business Numbers",
         }
     }
 
@@ -93,6 +117,9 @@ impl Pattern {
             Pattern::CaPostal | Pattern::CaSin => "en-CA",
             Pattern::FrNir => "fr-FR",
             Pattern::JpPostal | Pattern::JpMyNumber => "ja-JP",
+            Pattern::DeTaxId => "de-DE",
+            Pattern::InAadhaar | Pattern::InPan => "en-IN",
+            Pattern::AuTfn | Pattern::AuMedicare | Pattern::AuAbn => "en-AU",
         }
     }
 
@@ -112,6 +139,12 @@ impl Pattern {
             Pattern::JpPostal => "jp-postal",
             Pattern::JpMyNumber => "jp-my-number",
             Pattern::Iban => "iban",
+            Pattern::DeTaxId => "de-tax-id",
+            Pattern::InAadhaar => "in-aadhaar",
+            Pattern::InPan => "in-pan",
+            Pattern::AuTfn => "au-tfn",
+            Pattern::AuMedicare => "au-medicare",
+            Pattern::AuAbn => "au-abn",
         }
     }
 
@@ -243,23 +276,103 @@ fn ssn(s: &[char], i: usize) -> Option<usize> {
     (area != "000" && area != "666" && !area.starts_with('9')).then_some(11)
 }
 
+/// English month names; their three-letter abbreviations are also read.
 const MONTHS: [&str; 12] = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
-/// A month name or its three-letter abbreviation (optionally with a full stop) at `i`.
+/// Month names in French, German, Spanish, Italian, Portuguese and Dutch (with the common
+/// spellings without accents), read in full.
+const MONTHS_OTHER: [&str; 70] = [
+    "janvier",
+    "février",
+    "fevrier",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "aout",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+    "decembre",
+    "januar",
+    "jänner",
+    "februar",
+    "märz",
+    "maerz",
+    "juni",
+    "juli",
+    "oktober",
+    "dezember",
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "setiembre",
+    "noviembre",
+    "diciembre",
+    "gennaio",
+    "febbraio",
+    "aprile",
+    "maggio",
+    "giugno",
+    "luglio",
+    "settembre",
+    "ottobre",
+    "dicembre",
+    "janeiro",
+    "fevereiro",
+    "março",
+    "marco",
+    "maio",
+    "junho",
+    "julho",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+    "januari",
+    "februari",
+    "maart",
+    "mei",
+    "augustus",
+    "ago",
+    "dic",
+    "gen",
+    "ene",
+    "abr",
+    "dez",
+    "okt",
+    "mrt",
+    "mär",
+];
+
+/// A month name or its abbreviation (optionally with a full stop) at `i`.
 fn month(s: &[char], i: usize) -> Option<usize> {
     if word(i.checked_sub(1).and_then(|p| s.get(p))) {
         return None;
     }
-    let rest: String = s[i..s.len().min(i + 10)].iter().collect::<String>().to_lowercase();
-    for m in MONTHS {
-        for cand in [m, &m[..3]] {
-            if rest.starts_with(cand) && !rest[cand.len()..].starts_with(|c: char| c.is_alphabetic()) {
-                let mut n = cand.chars().count();
-                if cand.len() == 3 && s.get(i + n) == Some(&'.') {
-                    n += 1;
-                }
-                return Some(n);
+    // Lower case, one character per character (so lengths stay those of `s`).
+    let rest: Vec<char> = s.get(i..s.len().min(i.saturating_add(12)))?.iter().map(|c| c.to_lowercase().next().unwrap_or(*c)).collect();
+    let fits = |cand: &str| -> Option<usize> {
+        let n = cand.chars().count();
+        let ok = rest.len() >= n && cand.chars().zip(&rest).all(|(a, b)| a == *b) && !rest.get(n).is_some_and(|c| c.is_alphabetic());
+        ok.then_some(n)
+    };
+    let english = MONTHS.iter().flat_map(|m| [*m, m.get(..3).unwrap_or(m)]);
+    for cand in english.chain(MONTHS_OTHER) {
+        if let Some(mut n) = fits(cand) {
+            if n <= 4 && s.get(i + n) == Some(&'.') {
+                n += 1;
             }
+            return Some(n);
         }
     }
     None
@@ -268,6 +381,17 @@ fn month(s: &[char], i: usize) -> Option<usize> {
 fn number(s: &[char], i: usize, min: usize, max: usize) -> Option<usize> {
     let n = s[i.min(s.len())..].iter().take(max + 1).take_while(|c| c.is_ascii_digit()).count();
     (n >= min && n <= max).then_some(n)
+}
+
+/// Spanish and Portuguese "de " / "del " between day, month and year: its length at `k`.
+fn connector(s: &[char], k: usize) -> usize {
+    for c in ["de ", "del "] {
+        let n = c.chars().count();
+        if s.get(k..k + n).is_some_and(|x| x.iter().copied().eq(c.chars())) {
+            return n + s[(k + n).min(s.len())..].iter().take_while(|c| **c == ' ').count();
+        }
+    }
+    0
 }
 
 fn date(s: &[char], i: usize) -> Option<usize> {
@@ -287,15 +411,24 @@ fn date(s: &[char], i: usize) -> Option<usize> {
         {
             return Some(a + b + c + 2);
         }
-        // "5 January 2024".
-        if a <= 2
-            && let k = i + a + spaces(i + a)
-            && k > i + a
-            && let Some(m) = month(s, k)
-        {
-            let k2 = k + m + spaces(k + m);
-            if let Some(y) = number(s, k2, 4, 4) {
-                return Some(k2 + y - i);
+        // "5 January 2024", "5. März 2024", "1er janvier 2024", "5 de enero de 2024".
+        if a <= 2 {
+            let mut d = i + a;
+            if s.get(d) == Some(&'.') {
+                d += 1;
+            } else if s.get(d..d + 2).is_some_and(|x| x == ['e', 'r']) {
+                d += 2;
+            }
+            let k = d + spaces(d);
+            let k = k + connector(s, k);
+            if k > d
+                && let Some(m) = month(s, k)
+            {
+                let k2 = k + m + spaces(k + m);
+                let k2 = k2 + connector(s, k2);
+                if let Some(y) = number(s, k2, 4, 4) {
+                    return Some(k2 + y - i);
+                }
             }
         }
         return None;
@@ -330,6 +463,12 @@ pub fn find(pattern: Pattern, text: &[char]) -> Vec<Range<usize>> {
         Pattern::JpPostal => locale::jp_postal,
         Pattern::JpMyNumber => locale::jp_my_number,
         Pattern::Iban => locale::iban,
+        Pattern::DeTaxId => locale::de_tax_id,
+        Pattern::InAadhaar => locale::in_aadhaar,
+        Pattern::InPan => locale::in_pan,
+        Pattern::AuTfn => locale::au_tfn,
+        Pattern::AuMedicare => locale::au_medicare,
+        Pattern::AuAbn => locale::au_abn,
     };
     let mut out = Vec::new();
     let mut i = 0;
@@ -467,6 +606,54 @@ mod tests {
             found(Pattern::JpMyNumber, "1234 5678 9018, 123456789018; bad check 1234 5678 9017, 13 digits 1234567890185"),
             ["1234 5678 9018", "123456789018"]
         );
+    }
+
+    #[test]
+    fn dates_in_other_languages() {
+        assert_eq!(
+            found(Pattern::Date, "le 1er janvier 2024, am 5. März 2024, el 5 de enero de 2024, il 12 settembre 2023, 3 de março de 2022, 7 mei 2021"),
+            ["1er janvier 2024", "5. März 2024", "5 de enero de 2024", "12 settembre 2023", "3 de março de 2022", "7 mei 2021"]
+        );
+        assert_eq!(found(Pattern::Date, "Oktober 3, 2020; DÉCEMBRE 25 2019"), ["Oktober 3, 2020", "DÉCEMBRE 25 2019"]);
+        // Not dates: a month name in a word, or no year.
+        assert_eq!(found(Pattern::Date, "Maiglöckchen 5 2020, 5 mars, marsupial 2020"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn german_indian_and_australian_identifiers() {
+        // Synthetic numbers with valid check digits.
+        assert_eq!(
+            found(Pattern::DeTaxId, "IdNr 86095742719 oder 86 095 742 719; falsch 86095742718, 06095742719"),
+            ["86095742719", "86 095 742 719"]
+        );
+        assert_eq!(
+            found(Pattern::InAadhaar, "Aadhaar 2345 6789 0124 or 234567890124; bad 2345 6789 0125, 1345 6789 0124"),
+            ["2345 6789 0124", "234567890124"]
+        );
+        assert_eq!(found(Pattern::InPan, "PAN ABCPE1234F, bad ABCQE1234F, ABCPE12345"), ["ABCPE1234F"]);
+        assert_eq!(found(Pattern::AuTfn, "TFN 123 456 782 and 123456782; bad 123 456 781"), ["123 456 782", "123456782"]);
+        assert_eq!(found(Pattern::AuMedicare, "Medicare 2123 45670 1, bad 2123 45671 1, 7123 45670 1"), ["2123 45670 1"]);
+        assert_eq!(found(Pattern::AuAbn, "ABN 51 824 753 556 or 51824753556; bad 51 824 753 557"), ["51 824 753 556", "51824753556"]);
+        let au = patterns_for("en-AU").unwrap();
+        assert!(au.contains(&Pattern::AuAbn) && au.contains(&Pattern::Iban) && !au.contains(&Pattern::InPan));
+    }
+
+    #[test]
+    fn ibans_follow_their_country_length() {
+        // DE is 22 characters: a valid mod-97 number of another length isn't a German IBAN.
+        assert_eq!(found(Pattern::Iban, "DE89 3704 0044 0532 0130 00"), ["DE89 3704 0044 0532 0130 00"]);
+        assert_eq!(found(Pattern::Iban, "NO93 8601 1117 947 and BE68 5390 0754 7034"), ["NO93 8601 1117 947", "BE68 5390 0754 7034"]);
+        assert_eq!(found(Pattern::Iban, "DE89370400440532013000123"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn patterns_survive_hostile_text() {
+        let junk: Vec<char> = "9 ".repeat(5000).chars().chain("İ̇ǅ\u{FFFF}\0.de ".chars().cycle().take(2000)).collect();
+        for p in PATTERNS {
+            let _ = find(p, &junk);
+            let _ = find(p, &[]);
+            let _ = find(p, &['1']);
+        }
     }
 
     #[test]

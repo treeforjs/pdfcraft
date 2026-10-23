@@ -53,6 +53,15 @@ fn keystroke_scripts_see_the_change() {
     e.will_commit = false;
     let o = go("event.rc = /^[0-9]*$/.test(event.change);", &e);
     assert!(!o.rc);
+    // The selection the keystroke replaces, clamped to the value; the script may change it.
+    let mut e = Event::field("Keystroke", "qty", "12345");
+    (e.change, e.will_commit, e.sel_start, e.sel_end) = ("9".into(), false, 1, 3);
+    let o = go("event.change = event.change + String(event.selStart) + String(event.selEnd);", &e);
+    assert_eq!(o.change, "913");
+    e.sel_start = usize::MAX;
+    e.sel_end = 2;
+    let o = go("event.change = String(event.selStart) + ',' + String(event.selEnd);", &e);
+    assert_eq!(o.change, "5,5");
 }
 
 #[test]

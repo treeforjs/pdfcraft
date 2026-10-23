@@ -42,6 +42,7 @@ pub mod prefs;
 pub mod reader_selection;
 pub mod reading_order;
 pub mod recovery;
+pub mod redaction_sets;
 pub mod revocation_fetch;
 pub mod signature_image;
 pub mod signature_settings;
@@ -3164,6 +3165,8 @@ pub struct Session {
     url_policy: url_access::UrlPolicy,
     /// Trust Manager ▸ attachments: the user's allow/deny overrides (see [`attachment_trust`]).
     attachment_trust: attachment_trust::AttachmentTrust,
+    /// Redaction code sets the user made (see [`redaction_sets`]).
+    redaction_code_sets: Vec<pdfcraft_redact::codes::CustomCodeSet>,
     /// Trust the operating system's root certificates for signatures (see [`os_trust`]).
     os_trust: os_trust::OsTrust,
     /// Keep tags on edit, inverted (on by default; see [`Session::set_keep_tags_on_edit`]).

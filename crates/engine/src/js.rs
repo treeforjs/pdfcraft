@@ -475,6 +475,18 @@ impl Session {
     /// a script's changes); navigation, links, menu items and submits are returned for the front
     /// end, never acted on here. Actions PdfCraft can't run are listed in `skipped`.
     pub fn run_field_trigger(&mut self, id: DocId, field: &str, trigger: pdfcraft_forms::Trigger) -> Result<TriggerOutcome, EditError> {
+        self.run_field_trigger_from(id, field, trigger, 0)
+    }
+
+    /// [`Session::run_field_trigger`] without the chain's first `skip` actions (a viewer that
+    /// ran a push button's first Mouse Up action itself runs the rest here).
+    pub fn run_field_trigger_from(
+        &mut self,
+        id: DocId,
+        field: &str,
+        trigger: pdfcraft_forms::Trigger,
+        skip: usize,
+    ) -> Result<TriggerOutcome, EditError> {
         use pdfcraft_forms::FieldAction as A;
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         let cos = doc.editor.as_ref().map(|e| &e.cos).ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
@@ -483,6 +495,7 @@ impl Session {
             .into_iter()
             .filter(|(t, _)| *t == trigger)
             .map(|(_, a)| a)
+            .skip(skip)
             .collect();
         let mut out = TriggerOutcome::default();
         for a in actions {
@@ -535,6 +548,80 @@ impl Session {
             out.ran.push(a.describe());
         }
         Ok(out)
+    }
+}
+
+/// What a keystroke in a text field did ([`Session::field_keystroke`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct KeystrokeOutcome {
+    /// `event.rc`: `false` refuses the keystroke (the field keeps its text).
+    pub rc: bool,
+    /// The text to insert instead of the one typed (`event.change` after the script).
+    pub change: String,
+    /// What ran: "script" (the field's Keystroke JavaScript), "format" (its AF format,
+    /// natively) or "none".
+    pub checked_by: &'static str,
+    pub alerts: Vec<String>,
+    pub console: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+/// The longest text a keystroke check looks at (a paste longer than this is refused).
+pub const MAX_KEYSTROKE_TEXT: usize = 64 * 1024;
+
+impl Session {
+    /// The Keystroke event while typing in text field `field` (`event.willCommit` false): the
+    /// field holds `value`, and `change` replaces its characters `sel` (a char range, clamped).
+    /// The field's Keystroke JavaScript runs when it has one and JavaScript is on (bounded like
+    /// every script, and only its `rc` and `change` count: other fields are not changed while
+    /// typing); otherwise its AF format decides natively ([`pdfcraft_forms::af::keystroke_partial`]).
+    /// A field with neither accepts everything. Nothing in the document changes.
+    pub fn field_keystroke(
+        &self,
+        id: DocId,
+        field: &str,
+        value: &str,
+        change: &str,
+        sel: std::ops::Range<usize>,
+    ) -> Result<KeystrokeOutcome, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let f = doc.form.iter().find(|f| f.name == field).ok_or_else(|| EditError::Invalid(format!("no field named {field:?}")))?;
+        if value.len().saturating_add(change.len()) > MAX_KEYSTROKE_TEXT {
+            return Ok(KeystrokeOutcome { rc: false, change: String::new(), checked_by: "none", ..Default::default() });
+        }
+        let len = value.chars().count();
+        let (start, end) = (sel.start.min(len), sel.end.clamp(sel.start.min(len), len));
+        let proposed: String = value.chars().take(start).chain(change.chars()).chain(value.chars().skip(end)).collect();
+        if let Some(script) = f.actions.scripts.keystroke.as_ref().filter(|_| !self.js_off)
+            && let Some(cos) = doc.editor.as_ref().map(|e| &e.cos)
+        {
+            let env = ScriptEnv::new(doc, cos);
+            let mut ev = pdfcraft_js::Event::field("Keystroke", field, value);
+            ev.change = change.to_string();
+            ev.will_commit = false;
+            // selStart/selEnd count UTF-16 units, as JavaScript does.
+            let units = |n: usize| value.chars().take(n).map(char::len_utf16).sum::<usize>();
+            (ev.sel_start, ev.sel_end) = (units(start), units(end));
+            let o = pdfcraft_js::run(script, &ev, &env.runner.doc, &env.states, &env.runner.doc_scripts, Limits::default());
+            let failed = o.error.is_some();
+            return Ok(KeystrokeOutcome {
+                // A failing script leaves the keystroke alone, as on commit.
+                rc: o.rc || failed,
+                change: if failed { change.to_string() } else { o.change.clone() },
+                checked_by: "script",
+                alerts: o.alerts,
+                console: o.console,
+                errors: o.error.into_iter().collect(),
+            });
+        }
+        let format = &f.actions.format;
+        let checked_by = if *format == pdfcraft_forms::af::Format::None { "none" } else { "format" };
+        Ok(KeystrokeOutcome {
+            rc: pdfcraft_forms::af::keystroke_partial(format, &proposed),
+            change: change.to_string(),
+            checked_by,
+            ..Default::default()
+        })
     }
 }
 
@@ -699,19 +786,45 @@ impl Session {
         if found.is_empty() {
             return Ok(Vec::new());
         }
-        let names = found.iter().map(|(_, c)| c.name.clone()).collect();
-        let edits = found
-            .into_iter()
-            .map(|(page, c)| Edit::AddField {
-                page,
-                rect: c.rect,
-                kind: match c.kind {
-                    pdfcraft_forms::detect::Kind::Text => pdfcraft_forms::NewField::Text { multiline: c.rect[3] - c.rect[1] > 30.0 },
-                    pdfcraft_forms::detect::Kind::CheckBox => pdfcraft_forms::NewField::CheckBox,
-                },
-                name: Some(c.name),
-            })
-            .collect();
+        let mut names: Vec<String> = Vec::new();
+        let mut edits = Vec::new();
+        for (page, c) in found {
+            use pdfcraft_forms::detect::Kind;
+            if !names.contains(&c.name) {
+                names.push(c.name.clone());
+            }
+            match c.kind {
+                Kind::Text => edits.push(Edit::AddField {
+                    page,
+                    rect: c.rect,
+                    kind: pdfcraft_forms::NewField::Text { multiline: c.rect[3] - c.rect[1] > 30.0 },
+                    name: Some(c.name),
+                }),
+                Kind::CheckBox => edits.push(Edit::AddField { page, rect: c.rect, kind: pdfcraft_forms::NewField::CheckBox, name: Some(c.name) }),
+                // One button of a group: the first creates the group, the others join it.
+                Kind::Radio { export, .. } => edits.push(Edit::AddField {
+                    page,
+                    rect: c.rect,
+                    kind: pdfcraft_forms::NewField::Radio { group: Some(c.name), export },
+                    name: None,
+                }),
+                // A comb: a text field with one character per cell.
+                Kind::Comb { cells } => {
+                    edits.push(Edit::AddField {
+                        page,
+                        rect: c.rect,
+                        kind: pdfcraft_forms::NewField::Text { multiline: false },
+                        name: Some(c.name.clone()),
+                    });
+                    let props = pdfcraft_forms::FieldProps {
+                        max_len: Some(Some(cells)),
+                        flags: vec![(pdfcraft_forms::flags::COMB, true)],
+                        ..Default::default()
+                    };
+                    edits.push(Edit::SetFieldProps { name: c.name, props: Box::new(props) });
+                }
+            }
+        }
         self.apply(id, Edit::Batch { label: "Detect form fields".into(), edits })?;
         Ok(names)
     }

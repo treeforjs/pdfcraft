@@ -115,7 +115,7 @@ fn redaction_properties_offer_redaction_codes() {
     h.run_steps(2);
     h.get_by_label("Redaction code:");
     // The code list (U.S. FOIA by default); picking a code makes it the overlay text.
-    h.query_all_by(|n| n.value().is_some_and(|v| v == "Choose a code")).next().expect("code list").click();
+    h.query_all_by(|n| n.value().is_some_and(|v| v == "Choose codes")).next().expect("code list").click();
     h.run_steps(2);
     h.get_by_label("(b)(6)").click();
     h.run_steps(2);
