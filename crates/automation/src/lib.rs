@@ -27,6 +27,7 @@ mod custom_commands;
 mod dests;
 mod direction;
 mod forms;
+mod help;
 mod ink_manager;
 mod js_debug;
 mod links;
@@ -293,6 +294,8 @@ impl Automation {
                 json!({ "redone": label, "document": summary(self.doc(&a)?) })
             }
             "command_list" => self.command_list(&a)?,
+            "help_shortcuts" => self.help_shortcuts(&a)?,
+            "help_guide" => self.help_guide(&a)?,
             "command_run" => return self.command_run(&a),
             "command_batch" => self.command_batch(&a)?,
             "doc_inspect" => self.doc_inspect(&a)?,

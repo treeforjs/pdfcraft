@@ -322,6 +322,8 @@ PdfCraft is a clean-room implementation. Its behaviour comes from the ISO 32000 
 
 ## Get started
 
+New to PdfCraft? The [user guide](docs/user/README.md) explains every area of the app in plain language, and [docs/user/keyboard.md](docs/user/keyboard.md) lists every shortcut. Both are in the app too, under Help.
+
 For Ubuntu 24.04 / 26.04 LTS (x86_64), see the [Ubuntu install and build guide](docs/ubuntu.md).
 For Windows 11 graphics setup, see the [NVIDIA and Intel driver guide](docs/windows-gpu.md).
 

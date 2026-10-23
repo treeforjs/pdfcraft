@@ -2570,3 +2570,8 @@ compare-page	Moved	Přesunutá
 	Downloading text recognition models… {r} of {t} MB	Stahování modelů pro rozpoznávání textu… {r} z {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Modely pro rozpoznávání textu (12 MB) se z tohoto webu stáhnou při prvním rozpoznávání textu a pak zůstanou v tomto prohlížeči.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	modely pro rozpoznávání textu ještě nebyly do tohoto prohlížeče staženy; spusťte Rozpoznat text, aby se stáhly
+	User guide	Uživatelská příručka
+	Search shortcuts	Hledat zkratky
+	No shortcuts match “{query}”.	Hledání „{query}“ neodpovídá žádná zkratka.
+	Document view	Zobrazení dokumentu
+	Tools	Nástroje

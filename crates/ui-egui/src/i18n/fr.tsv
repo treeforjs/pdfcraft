@@ -2546,3 +2546,8 @@ compare-page	Moved	Déplacée
 	Downloading text recognition models… {r} of {t} MB	Téléchargement des modèles de reconnaissance de texte… {r} sur {t} Mo
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Les modèles de reconnaissance de texte (12 Mo) sont téléchargés depuis ce site la première fois que vous reconnaissez du texte, puis conservés dans ce navigateur.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	les modèles de reconnaissance de texte n’ont pas encore été téléchargés dans ce navigateur ; lancez Reconnaître le texte pour les télécharger
+	User guide	Guide de l’utilisateur
+	Search shortcuts	Rechercher des raccourcis
+	No shortcuts match “{query}”.	Aucun raccourci ne correspond à « {query} ».
+	Document view	Vue du document
+	Tools	Outils

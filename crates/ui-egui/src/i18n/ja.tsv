@@ -2546,3 +2546,8 @@ compare-page	Moved	移動
 	Downloading text recognition models… {r} of {t} MB	テキスト認識モデルをダウンロード中… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	テキスト認識モデル（12 MB）は、初めてテキストを認識するときにこのサイトからダウンロードされ、その後はこのブラウザーに保存されます。
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	テキスト認識モデルがまだこのブラウザーにダウンロードされていません。「テキスト認識」を実行してダウンロードしてください
+	User guide	ユーザーガイド
+	Search shortcuts	ショートカットを検索
+	No shortcuts match “{query}”.	「{query}」に一致するショートカットはありません。
+	Document view	ドキュメント表示
+	Tools	ツール

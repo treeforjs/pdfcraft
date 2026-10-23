@@ -80,6 +80,7 @@ mod files;
 pub mod fill_sign;
 pub mod folders_ui;
 pub mod forms_ui;
+pub mod help_ui;
 mod home;
 mod icon_data;
 pub mod icons;
@@ -241,6 +242,8 @@ pub enum Dialog {
     Properties(PropsTab),
     About,
     Shortcuts,
+    /// Help → User guide (the bundled docs/user pages).
+    UserGuide,
     Split,
     /// Pages ▸ Number pages… (page labels).
     NumberPages,
@@ -592,6 +595,8 @@ pub struct PdfCraftApp {
     last_autosave: f64,
     /// The Preferences window: its page, search text and text boxes being typed in.
     pub prefs_ui: prefs_ui::PrefsUi,
+    /// Help → Keyboard shortcuts (its search) and Help → User guide (the page shown).
+    pub help_ui: help_ui::HelpUi,
     /// The accessibility preferences last laid over the theme (see [`PdfCraftApp::restyle`]).
     styled_a11y: Option<theme::Accessibility>,
     pending_recovered: Option<RecoveryMeta>,
@@ -846,6 +851,7 @@ impl PdfCraftApp {
             recovery_too_large: Default::default(),
             last_autosave: 0.0,
             prefs_ui: Default::default(),
+            help_ui: Default::default(),
             styled_a11y: None,
             pending_recovered: None,
             allow_quit: false,
@@ -1683,6 +1689,8 @@ impl PdfCraftApp {
         }
         let view = self.active.and_then(|i| self.views.get_mut(i));
         match (key, view) {
+            ("shortcuts-query", _) => self.help_ui.query = value.chars().take(pdfcraft_engine::help::MAX_QUERY_CHARS).collect(),
+            ("user-guide-page", _) => self.set_guide_page(value)?,
             ("preferences-page", _) => {
                 let ids: Vec<&str> = prefs_ui::Page::ALL.iter().map(|p| p.id()).collect();
                 self.prefs_ui.page = prefs_ui::Page::from_id(value).ok_or_else(|| format!("preferences-page must be one of {}", ids.join(", ")))?;
@@ -1762,6 +1770,7 @@ impl PdfCraftApp {
                     "fonts" => Some(Dialog::Properties(PropsTab::Fonts)),
                     "advanced" => Some(Dialog::Properties(PropsTab::Advanced)),
                     "shortcuts" => Some(Dialog::Shortcuts),
+                    "user-guide" => Some(Dialog::UserGuide),
                     "split" => Some(Dialog::Split),
                     "protect" => Some(Dialog::Protect),
                     "page-boxes" => Some(Dialog::PageBoxes),

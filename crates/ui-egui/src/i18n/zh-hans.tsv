@@ -2510,3 +2510,8 @@ compare-page	Moved	已移动
 	Downloading text recognition models… {r} of {t} MB	正在下载文本识别模型… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	文本识别模型（12 MB）会在你第一次识别文本时从本站下载，之后保存在此浏览器中。
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	文本识别模型尚未下载到此浏览器；请运行“识别文本”来下载
+	User guide	用户指南
+	Search shortcuts	搜索快捷键
+	No shortcuts match “{query}”.	没有与“{query}”匹配的快捷键。
+	Document view	文档视图
+	Tools	工具

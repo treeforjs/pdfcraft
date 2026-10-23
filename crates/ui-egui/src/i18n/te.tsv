@@ -2507,3 +2507,8 @@ compare-page	Moved	తరలించబడింది
 	Downloading text recognition models… {r} of {t} MB	టెక్స్ట్ గుర్తింపు మోడళ్లను డౌన్‌లోడ్ చేస్తోంది… {t} MBలో {r} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	టెక్స్ట్ గుర్తింపు మోడళ్లు (12 MB) మీరు మొదటిసారి టెక్స్ట్‌ను గుర్తించినప్పుడు ఈ సైట్ నుండి డౌన్‌లోడ్ అవుతాయి, ఆ తర్వాత ఈ బ్రౌజర్‌లోనే ఉంటాయి.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	టెక్స్ట్ గుర్తింపు మోడళ్లు ఇంకా ఈ బ్రౌజర్‌లోకి డౌన్‌లోడ్ కాలేదు; వాటిని డౌన్‌లోడ్ చేయడానికి టెక్స్ట్‌ను గుర్తించు అమలు చేయండి
+	User guide	వినియోగదారు గైడ్
+	Search shortcuts	షార్ట్‌కట్‌లను వెతకండి
+	No shortcuts match “{query}”.	“{query}”కి సరిపోలే షార్ట్‌కట్‌లు లేవు.
+	Document view	డాక్యుమెంట్ వీక్షణ
+	Tools	సాధనాలు

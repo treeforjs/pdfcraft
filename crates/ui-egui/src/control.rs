@@ -606,6 +606,9 @@ impl Host for crate::PdfCraftApp {
             "windows": self.windows_state(),
             "compare_view": self.side_by_side.as_ref().filter(|_| self.side_by_side_showing()).map(|v| v.state()),
             "dialog": self.dialog.map(|d| format!("{d:?}")),
+            // Help → Keyboard shortcuts' search and Help → User guide's page
+            // (ui.set shortcuts-query, user-guide-page).
+            "help": { "shortcuts_query": self.help_ui.query, "user_guide_page": self.guide_page_slug() },
             "js_debugger": (self.dialog == Some(crate::Dialog::JsDebugger)).then(|| self.js_debugger.state()),
             "palette_open": self.palette_open,
             "theme": format!("{:?}", self.theme),

@@ -2465,3 +2465,8 @@ compare-page	Moved	已移動
 	Downloading text recognition models… {r} of {t} MB	正在下載文字辨識模型… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	文字辨識模型（12 MB）會在你第一次辨識文字時從本站下載，之後保存在此瀏覽器中。
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	文字辨識模型尚未下載到此瀏覽器；請執行「辨識文字」來下載
+	User guide	使用者指南
+	Search shortcuts	搜尋快速鍵
+	No shortcuts match “{query}”.	沒有符合「{query}」的快速鍵。
+	Document view	文件檢視
+	Tools	工具

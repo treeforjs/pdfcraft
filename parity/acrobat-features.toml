@@ -1674,7 +1674,7 @@ tier = "P0"
 milestone = "M4"
 status = "shipped"
 commands = []
-tools = []
+tools = ["help_shortcuts"]
 evidence = ["crates/ui-egui/tests/commands.rs::shortcuts_run_registered_commands", "crates/engine/src/commands.rs::shortcut_labels_follow_platform_conventions"]
 notes = ""
 
@@ -1686,8 +1686,8 @@ tier = "P1"
 milestone = "M4"
 status = "shipped"
 commands = ["help.shortcuts"]
-tools = []
-evidence = ["crates/ui-egui/tests/commands.rs::the_shortcuts_dialog_lists_the_real_bindings"]
+tools = ["help_shortcuts"]
+evidence = ["crates/ui-egui/tests/commands.rs::the_shortcuts_dialog_lists_the_real_bindings", "crates/ui-egui/tests/commands.rs::the_shortcuts_panel_searches_and_survives_hostile_text"]
 notes = ""
 
 [[feature]]
@@ -10054,8 +10054,19 @@ title = "User documentation and keyboard reference"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["help.user_guide", "help.shortcuts"]
+tools = ["help_guide", "help_shortcuts"]
+evidence = [
+  "crates/engine/src/help.rs::keyboard_reference_doc_is_up_to_date",
+  "crates/engine/src/help.rs::every_registry_shortcut_is_in_the_reference",
+  "crates/engine/src/help.rs::the_guide_bundles_every_page_and_its_links_resolve",
+  "crates/engine/src/help.rs::hostile_search_text_is_bounded_and_never_panics",
+  "crates/automation/tests/help.rs::shortcuts_list_the_registry_bindings_and_search_them",
+  "crates/automation/tests/help.rs::guide_lists_pages_returns_one_and_searches",
+  "crates/automation/tests/help.rs::hostile_help_arguments_are_refused_or_bounded",
+  "crates/ui-egui/tests/commands.rs::the_shortcuts_panel_searches_and_survives_hostile_text",
+  "crates/ui-egui/tests/commands.rs::the_user_guide_opens_offline_and_follows_its_links",
+  "crates/ui-egui/src/help_ui.rs::hostile_markdown_never_panics",
+]
+notes = "docs/user: a plain-language guide for people, one page per area (getting started, viewing, editing, comments, forms, signing, organizing, create and export, security, OCR, accessibility, preferences, web app, automation), written from the shipped and partial features and saying what is still missing. docs/user/keyboard.md is generated from the command registry plus the document view's own keys (pdfcraft_engine::help); a unit test fails when it is out of date (UPDATE_USER_DOCS=1 rewrites it). The guide is bundled into the binary and shown offline under Help → User guide (page list, Markdown rendered in the app, links between pages; nothing is fetched). Help → Keyboard shortcuts (⌘/) is a searchable panel grouped by menu that matches actions in English and the interface language, keys and command ids. The guide text itself is English only; the panels around it are translated."

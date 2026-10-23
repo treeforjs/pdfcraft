@@ -2459,3 +2459,8 @@ compare-page	Moved	Перемещена
 	Downloading text recognition models… {r} of {t} MB	Загрузка моделей распознавания текста… {r} из {t} МБ
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Модели распознавания текста (12 МБ) загружаются с этого сайта при первом распознавании текста и затем хранятся в этом браузере.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	модели распознавания текста ещё не загружены в этот браузер; запустите «Распознать текст», чтобы загрузить их
+	User guide	Руководство пользователя
+	Search shortcuts	Поиск сочетаний клавиш
+	No shortcuts match “{query}”.	Нет сочетаний клавиш по запросу «{query}».
+	Document view	Просмотр документа
+	Tools	Инструменты

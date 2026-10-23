@@ -2467,3 +2467,8 @@ compare-page	Moved	Movida
 	Downloading text recognition models… {r} of {t} MB	Descargando los modelos de reconocimiento de texto… {r} de {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Los modelos de reconocimiento de texto (12 MB) se descargan de este sitio la primera vez que reconoces texto y luego se guardan en este navegador.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	los modelos de reconocimiento de texto aún no se han descargado en este navegador; ejecuta Reconocer texto para descargarlos
+	User guide	Guía del usuario
+	Search shortcuts	Buscar atajos
+	No shortcuts match “{query}”.	Ningún atajo coincide con «{query}».
+	Document view	Vista del documento
+	Tools	Herramientas

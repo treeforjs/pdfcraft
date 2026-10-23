@@ -69,6 +69,8 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::FieldProps | Dialog::BulkFieldProps => 600.0,
             Dialog::About => 780.0,
             Dialog::Preferences => 800.0,
+            Dialog::UserGuide => 900.0,
+            Dialog::Shortcuts => 640.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
@@ -1103,45 +1105,14 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                     }
                 });
             }
-            Dialog::Shortcuts => {
-                ui.label(egui::RichText::new(tl!("Keyboard shortcuts")).font(theme::semibold(18.0)));
-                ui.add_space(8.0);
-                let mac = cfg!(target_os = "macos") || cfg!(target_arch = "wasm32");
-                // Registered commands first (always in sync with the real bindings), then the
-                // keys the document view handles itself.
-                let mut rows: Vec<(String, String)> = pdfcraft_engine::commands::COMMANDS
-                    .iter()
-                    .filter_map(|c| c.shortcut.map(|k| (k.label(mac), tl!(c.label).trim_end_matches('…').to_string())))
-                    .collect();
-                for (k, v) in [
-                    ("⌘G / ⇧⌘G", tl!("Next / previous match")),
-                    ("⌘C", tl!("Copy selected text")),
-                    ("Double-click", tl!("Select a word")),
-                    ("Esc", tl!("Clear selection / close find")),
-                    ("⌘1", tl!("Actual size")),
-                    ("⌘0", tl!("Zoom to page level")),
-                    ("⌘2", tl!("Fit to width")),
-                    ("⌘3", tl!("Fit visible")),
-                    ("⌘+ / ⌘−", tl!("Zoom in / out (also pinch or ⌘-scroll)")),
-                    ("⇧⌘+ / ⇧⌘−", tl!("Rotate view")),
-                    ("Home / End", tl!("First / last page")),
-                    ("← / →, ⌘← / ⌘→", tl!("Previous / next page")),
-                    ("V", tl!("Select (V)")),
-                    ("H / Space (hold)", tl!("Hand (H)")),
-                    ("Delete", tl!("Delete selected pages (Organize)")),
-                    ("⌘A", tl!("Select all pages (Organize)")),
-                ] {
-                    rows.push((tl!(k).to_string(), tl!(v).to_string()));
+            Dialog::Shortcuts => crate::help_ui::shortcuts_body(ui, app, &t),
+            Dialog::UserGuide => {
+                close = crate::help_ui::guide_body(ui, app, &t);
+                // Its Keyboard shortcuts button switches to that window.
+                if let Some(d) = app.dialog {
+                    next = d;
                 }
-                egui::ScrollArea::vertical().max_height(460.0).show(ui, |ui| {
-                    egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
-                        for (k, v) in &rows {
-                            ui.label(egui::RichText::new(k).font(egui::FontId::monospace(12.5)));
-                            ui.label(v);
-                            ui.end_row();
-                        }
-                    });
-                });
+                return;
             }
             Dialog::About => {
                 // Tabs About · Contributors · Models (craftrules standards/contributors.md).

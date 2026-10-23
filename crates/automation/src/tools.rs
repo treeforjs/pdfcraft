@@ -2670,6 +2670,21 @@ pub fn tools() -> Vec<ToolDef> {
         t("command_list", "List commands", "Every registered PdfCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")
             .ro()
             .with(schema(json!({ "doc": doc(), "filter":{"type":"string"}, "enabled_only":{"type":"boolean"} }), &[])),
+        t("help_shortcuts", "Keyboard shortcuts", "The keyboard reference, the same list as the app's Help → Keyboard shortcuts and docs/user/keyboard.md: every registry command with a shortcut (section = its menu, or Tools) and the keys the document view and page grid handle themselves, each with section, action (English), command (registry id, or null for view keys) and the keys as written on macOS (mac, also the web app) and on Windows, Linux and FreeBSD (other). query keeps the rows whose action, section, keys or command id contain every word (case-insensitive; at most 200 characters are read). platform mac or other returns that platform's keys only. Read-only.")
+            .ro()
+            .cmd("help.shortcuts")
+            .with(schema(json!({
+                "query": { "type": "string", "maxLength": 10000, "description": "Words to search for, e.g. \"zoom\" or \"ctrl+shift\"." },
+                "platform": { "type": "string", "enum": ["mac", "other", "both"], "description": "Whose keys to return (default both)." },
+            }), &[])),
+        t("help_guide", "User guide", "PdfCraft's user guide for people (docs/user, bundled offline; the app shows it under Help → User guide). Without arguments lists the pages (page id and title); page returns one page's Markdown (ids such as getting-started, viewing, editing, comments, forms, signing, organizing, create-and-export, security, ocr, accessibility, preferences, web-app, automation, keyboard; a file name like viewing.md works too); query returns the lines containing every word (page, 1-based line, text), at most limit (default 50). Read-only.")
+            .ro()
+            .cmd("help.user_guide")
+            .with(schema(json!({
+                "page": { "type": "string", "maxLength": 200, "description": "A page id from the list." },
+                "query": { "type": "string", "maxLength": 10000, "description": "Words to search the guide for." },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+            }), &[])),
         t("command_run", "Run a command", "Run a registry command through its headless tool. Pass that tool's arguments in params (see command_list). Unknown params are ignored with warnings; path confinement still applies.")
             .destructive().with(schema(json!({"id":{"type":"string"},"params":{"type":"object"}}), &["id"])),
         t("command_batch", "Run several commands", "Run steps in order (at most 1000). Returns completed/failed counts and per-step ok/result/error; stop_on_error defaults to true.")

@@ -26,6 +26,7 @@ pub mod compare_view;
 pub mod dates;
 pub mod export;
 pub mod export_ocr;
+pub mod help;
 pub mod js;
 pub mod js_debug;
 pub mod links;

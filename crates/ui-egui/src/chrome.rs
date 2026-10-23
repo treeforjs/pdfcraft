@@ -141,7 +141,7 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     let response = icons::button(ui, icon, 28.0, false, &tip);
                     egui::Popup::menu(&response).show(|ui| theme_menu(app, ui));
                     if icons::button(ui, "circle-help", 28.0, false, tl!("Keyboard shortcuts")).clicked() {
-                        app.dialog = Some(Dialog::Shortcuts);
+                        app.open_shortcuts();
                     }
                 });
             });

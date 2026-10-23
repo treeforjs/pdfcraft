@@ -2546,3 +2546,8 @@ compare-page	Moved	Verschoben
 	Downloading text recognition models… {r} of {t} MB	Modelle für die Texterkennung werden heruntergeladen… {r} von {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Die Modelle für die Texterkennung (12 MB) werden beim ersten Erkennen von Text von dieser Website heruntergeladen und dann in diesem Browser aufbewahrt.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	die Modelle für die Texterkennung wurden noch nicht in diesen Browser heruntergeladen; führe „Text erkennen“ aus, um sie herunterzuladen
+	User guide	Benutzerhandbuch
+	Search shortcuts	Tastenkürzel suchen
+	No shortcuts match “{query}”.	Keine Tastenkürzel passen zu „{query}“.
+	Document view	Dokumentansicht
+	Tools	Werkzeuge

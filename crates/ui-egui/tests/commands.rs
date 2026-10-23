@@ -357,3 +357,60 @@ fn fix_hairlines_reports_what_it_changed() {
     assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("No hairlines to fix"));
     assert_eq!(app.session.get(id).unwrap().can_undo(), Some("Fix hairlines"), "the second run added no undo step");
 }
+
+#[test]
+fn the_shortcuts_panel_searches_and_survives_hostile_text() {
+    let mut h = harness();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Slash);
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::Shortcuts), "⌘/ opens the reference");
+    h.get_by_label("Previous view"); // the document view's own keys are listed too
+    h.get_by_label("Advanced search");
+    // The search box has the focus: typing filters at once.
+    h.event(egui::Event::Text("save as".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().help_ui.query, "save as");
+    h.get_by_label("Save as");
+    assert!(h.query_by_label("Advanced search").is_none(), "rows that don't match are hidden");
+    // Keys and command ids find rows too.
+    let mac = cfg!(target_os = "macos");
+    for q in [if mac { "⇧⌘F" } else { "ctrl+shift+f" }, "edit.advanced_search"] {
+        h.state_mut().set_option("shortcuts-query", q).unwrap();
+        h.run_steps(2);
+        h.get_by_label("Advanced search");
+    }
+    let huge = "🙂".repeat(50_000);
+    for q in ["\0\u{1}\u{7f}", "(.*)[]{}\\^$|?+", "\u{202e}evas", "e\u{301}\u{301}", huge.as_str(), "%s%n{0}"] {
+        h.state_mut().set_option("shortcuts-query", q).unwrap();
+        h.run_steps(2);
+        assert!(h.state().help_ui.query.chars().count() <= pdfcraft_engine::help::MAX_QUERY_CHARS);
+    }
+    h.state_mut().set_option("shortcuts-query", "zzzz-nothing").unwrap();
+    h.run_steps(2);
+    h.get_by_label_contains("No shortcuts match");
+    assert_eq!(h.state().dialog, Some(Dialog::Shortcuts), "still open after all that");
+}
+
+#[test]
+fn the_user_guide_opens_offline_and_follows_its_links() {
+    let mut h = harness();
+    h.state_mut().execute("help.user_guide");
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::UserGuide));
+    // The contents page: its title in the page list and as the page's heading.
+    assert_eq!(h.query_all_by_label("PdfCraft user guide").count(), 2);
+    h.state_mut().set_option("user-guide-page", "keyboard").unwrap();
+    h.run_steps(3);
+    h.get_by_label("Digital signatures").click(); // the page list
+    h.run_steps(3);
+    assert_eq!(h.state().guide_page_slug(), "signing");
+    h.get_by_label("Checking signatures");
+    // A link between pages switches the page.
+    h.state_mut().set_option("user-guide-page", "README.md").unwrap();
+    h.run_steps(3);
+    // The link in the page's text (the page list's entry is a button).
+    h.get_by_role_and_label(egui::accesskit::Role::Label, "Getting started").click();
+    h.run_steps(3);
+    assert_eq!(h.state().guide_page_slug(), "getting-started");
+    assert!(h.state_mut().set_option("user-guide-page", "../secrets").unwrap_err().contains("must be one of"));
+}
