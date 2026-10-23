@@ -49,16 +49,50 @@ fn doc() -> Value {
 }
 
 fn timestamp_server() -> Value {
+    json!({
+        "description": "The name of a configured server (sign_timestamp_servers_get), or a server given inline.",
+        "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 200 }, timestamp_server_object()],
+    })
+}
+
+fn timestamp_server_object() -> Value {
     schema(
         json!({
             "name":{"type":"string","minLength":1,"maxLength":200},
             "url":{"type":"string","maxLength":4096,"description":"HTTPS endpoint; HTTP only for literal loopback IPs. No redirects or URL credentials."},
             "policy":{"type":["string","null"],"description":"Optional requested policy OID; reply must match."},
             "timeout_seconds":{"type":"integer","minimum":1,"maximum":30},
-            "require_trusted_authority":{"type":"boolean","description":"Require the TSA chain to reach an explicitly trusted certificate. False permits an untrusted token, never confers trust."}
+            "require_trusted_authority":{"type":"boolean","description":"Require the TSA chain to reach an explicitly trusted certificate. False permits an untrusted token, never confers trust."},
+            "username":{"type":["string","null"],"maxLength":200,"description":"Account name for a server that needs one (HTTP Basic over HTTPS); its password is held for the session (sign_timestamp_servers_set password_for), never saved."}
         }),
         &["name", "url", "timeout_seconds", "require_trusted_authority"],
     )
+}
+
+fn appearance_schema() -> Value {
+    json!({
+        "description": "What a visible signature shows: the name of a saved appearance (sign_appearance_list), or an object.",
+        "anyOf": [
+            { "type": "string", "minLength": 1, "maxLength": 100 },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "saved": { "type": "string", "description": "Start from this saved appearance." },
+                    "show_name": { "type": "boolean", "description": "The signer's name (in large type on the left when there is no graphic). Default true." },
+                    "date": { "type": "boolean", "description": "Default true." },
+                    "reason": { "type": "boolean" },
+                    "location": { "type": "boolean" },
+                    "distinguished_name": { "type": "boolean" },
+                    "labels": { "type": "boolean", "description": "Labels such as Date: and Reason:. Default true." },
+                    "image": { "type": ["string", "null"], "description": "A PNG or JPEG file (at most 4 MiB, 4 megapixels) shown on the left: a scanned signature. null removes it." },
+                    "remove_white": { "type": "boolean", "description": "Make the picture's near-white paper transparent." },
+                    "strokes": { "type": ["array", "null"], "maxItems": 256, "items": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }, "description": "A drawn signature: strokes of [x, y] points (any units, y down; fitted to the box keeping proportions). At most 256 strokes and 8192 points." },
+                    "logo": { "type": ["string", "null"], "description": "A PNG or JPEG file shown faintly behind the whole signature. null removes it." }
+                }
+            }
+        ]
+    })
 }
 
 fn verification_time() -> Value {
@@ -1402,6 +1436,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc(), "field": { "type": "string", "description": "The signature field's fully qualified name (from sign_list)." }, "out": path_arg(), "open": { "type": "boolean" } }), &["doc", "field"])),
         t("sign_compare_signed_version", "Compare signed version to current version", "Compare Signed Version to Current Version: every change made after the signature in `field` was applied, read from the objects the later revisions changed or added (the same diff signature validation uses). Each change has kind (page content, comments, form fill, changes to locked fields, signature, pages added or removed, document structure, links, metadata, document security store, other changes), action (added, modified, removed), page (1-based; for something removed, in the signed version), object, subject (page, page content, an annotation subtype, form field…), the form field's name and its value before and after, and whether the signature's DocMDP/FieldMDP permissions allow it. Also: permissions (certification level tightened by a field lock; null = approval signature) in words, page counts and pages added/removed, the categories with permitted flags, modified and permitted (the verdict signature validation reports). With text (default true) also a word-level Compare Files report between the signed and current versions (visual: also compare how pages look, default false). limit caps the listed changes (default 500).")
             .ro()
+            .cmd("sign.compare_signed_version")
             .with(schema(json!({ "doc": doc(), "field": { "type": "string", "description": "The signature field's fully qualified name (from sign_list)." }, "text": { "type": "boolean" }, "visual": { "type": "boolean" }, "limit": { "type": "integer", "minimum": 1 } }), &["doc", "field"])),
         t("sign_timestamp", "Timestamp and save document", "Request an RFC 3161 document timestamp from an explicitly configured server and save an incremental revision. Sends only the digest request. Requires allow_network: true; no redirects; response and time limits. No automatic certificate trust.")
             .cmd("sign.timestamp").with(schema(json!({"doc":doc(),"out":path_arg(),"timestamp_server":timestamp_server(),"allow_network":{"type":"boolean"}}), &["doc","out","timestamp_server","allow_network"])),
@@ -1485,6 +1520,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "out": { "type": "string", "description": "Where to save the signed document." },
                     "timestamp_server": timestamp_server(),
                     "allow_network": {"type":"boolean","description":"Required true when timestamp_server is supplied."},
+                    "appearance": appearance_schema(),
                 }),
                 &["doc", "id", "out"],
             )),
@@ -1525,6 +1561,63 @@ pub fn tools() -> Vec<ToolDef> {
                     "limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
                 }),
                 &[],
+            )),
+        t("sign_trust_list", "List trusted certificates and their trust settings", "The trusted certificates (certificate details with sha256) and what each is trusted for (Acrobat: the certificate's Trust tab): root (trusted as a root: certificates it issued are trusted too; off: only signatures made with this very certificate), signatures (signed documents or data, and timestamps) and certified_documents (certification signatures). New certificates are trusted for all three.")
+            .ro()
+            .cmd("sign.trusted_certificates")
+            .with(schema(json!({}), &[])),
+        t("sign_trust_set", "Change a trusted certificate's trust settings", "Set what the trusted certificate with SHA-256 fingerprint sha256 (sign_trust_list; spaces and colons are ignored) is trusted for: root, signatures, certified_documents (each optional, others unchanged), or remove: true to take it off the list. Every open document is revalidated. Returns the trusted list.")
+            .cmd("sign.trusted_certificates")
+            .with(schema(
+                json!({
+                    "sha256": { "type": "string", "description": "The certificate's SHA-256 fingerprint." },
+                    "root": { "type": "boolean" },
+                    "signatures": { "type": "boolean" },
+                    "certified_documents": { "type": "boolean" },
+                    "remove": { "type": "boolean" },
+                }),
+                &["sha256"],
+            )),
+        t("sign_appearance_list", "List saved signature appearances", "The saved signature appearances (Preferences → Signatures → Appearances): name, the text items shown (show_name, date, reason, location, distinguished_name, labels), the graphic (an imported picture's size, or a drawn signature's strokes and points) and the logo's size. sign_document's appearance takes a name.")
+            .ro()
+            .cmd("sign.appearances")
+            .with(schema(json!({}), &[])),
+        t("sign_appearance_save", "Save a signature appearance", "Save (or replace) the signature appearance `name`: appearance says which text items show and adds a picture (image: a PNG or JPEG file; remove_white makes its paper transparent) or a drawn signature (strokes), and a faint logo behind it all. At most 32 appearances; pictures at most 4 MiB. The desktop app saves them with its settings. Returns the list.")
+            .cmd("sign.appearances")
+            .with(schema(json!({ "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "appearance": appearance_schema() }), &["name"])),
+        t("sign_appearance_delete", "Delete a saved signature appearance", "Delete the saved signature appearance `name`. Returns the list.")
+            .cmd("sign.appearances")
+            .destructive()
+            .with(schema(json!({ "name": { "type": "string" } }), &["name"])),
+        t("sign_timestamp_servers_get", "List timestamp servers", "The configured timestamp servers (Preferences → Signatures → Timestamp servers): name, url, policy, timeout_seconds, require_trusted_authority, username and, for a server with a user name, password_held. None is configured by default. sign_document, sign_timestamp, sign_embed_evidence and sign_add_verification take a server's name as timestamp_server.")
+            .ro()
+            .cmd("sign.timestamp_servers")
+            .with(schema(json!({}), &[])),
+        t("sign_timestamp_servers_set", "Configure timestamp servers", "Replace the timestamp servers (servers: the whole list; each checked: HTTPS, or HTTP to a literal loopback IP; no URL credentials or fragments; 1-30 s; distinct names; at most 32), and/or hold the password of the server named password_for for this session (password; null forgets it). Passwords are never saved or returned. Nothing changes unless every server is valid. Returns the list.")
+            .cmd("sign.timestamp_servers")
+            .with(schema(
+                json!({
+                    "servers": { "type": "array", "items": timestamp_server_object(), "maxItems": 32 },
+                    "password_for": { "type": "string" },
+                    "password": { "type": ["string", "null"] },
+                }),
+                &[],
+            )),
+        t("sign_add_verification", "Add verification information (LTV)", "Add verification information to the document's signatures and save an incremental revision to out (PAdES B-LT; with timestamp_server also a document timestamp over it, B-LTA). Embeds every signer's and timestamp authority's certificate chain in the Document Security Store, with OCSP responses or CRLs fetched from the addresses the certificates name when allow_network is true, Preferences → Signatures → fetch revocation information is on and Internet access allows the site (trust_urls_get; allow_prompted: true also allows sites it would ask about; blocked sites stay blocked). Requests run with a deadline (timeout_seconds, default 10; one minute in all), at most 32 requests and 2 MiB per response, no redirects. Every response must verify against the certificate's issuer; anything else is reported and not embedded. Local DER files (certificates, crls, ocsps) are added too. Returns each request's outcome (good, revoked, blocked, asks, skipped, unusable, failed), the coverage per certificate and whether it is complete. Signed bytes are never changed; certificates are never trusted by this.")
+            .cmd("sign.ltv_enable")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "out": path_arg(),
+                    "allow_network": { "type": "boolean" },
+                    "allow_prompted": { "type": "boolean" },
+                    "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 30 },
+                    "certificates": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "crls": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "ocsps": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "timestamp_server": timestamp_server(),
+                }),
+                &["doc", "out"],
             )),
         t("trust_urls_get", "Internet access settings", "Read the policy for internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): mode (allow-all, block-all or custom), default_action for hosts on no rule in custom mode (allow, block or ask), and rules [{host, action, subdomains}]. It governs links' URI actions, Submit Form and scripts' app.launchURL/submitForm. The desktop app keeps it with its settings; here it lasts for the session.")
             .ro()

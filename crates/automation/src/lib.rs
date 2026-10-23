@@ -50,6 +50,7 @@ mod recovery;
 mod redact;
 mod search_folder;
 mod separations;
+mod signature_settings;
 mod signature_workflow;
 mod signed_version;
 mod signing;
@@ -969,6 +970,14 @@ impl Automation {
             "sign_os_trust_get" => self.sign_os_trust_get()?,
             "sign_os_trust_set" => self.sign_os_trust_set(&a)?,
             "sign_os_roots" => self.sign_os_roots(&a)?,
+            "sign_trust_list" => self.sign_trust_list()?,
+            "sign_trust_set" => self.sign_trust_set(&a)?,
+            "sign_appearance_list" => self.sign_appearance_list()?,
+            "sign_appearance_save" => self.sign_appearance_save(&a)?,
+            "sign_appearance_delete" => self.sign_appearance_delete(&a)?,
+            "sign_timestamp_servers_get" => self.sign_timestamp_servers_get()?,
+            "sign_timestamp_servers_set" => self.sign_timestamp_servers_set(&a)?,
+            "sign_add_verification" => self.sign_add_verification(&a)?,
             "trust_urls_get" => self.trust_urls_get()?,
             "trust_urls_set" => self.trust_urls_set(&a)?,
             "trust_url_check" => self.trust_url_check(&a)?,

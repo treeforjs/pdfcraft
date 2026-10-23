@@ -5920,11 +5920,11 @@ title = "Configure signature appearance (text, graphic, name)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
-commands = ["sign.digital"]
-tools = []
-evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
-notes = "text items (name, date, reason, location, DN, labels); no graphics or saved appearances yet"
+status = "shipped"
+commands = ["sign.digital", "sign.appearances"]
+tools = ["sign_document", "sign_appearance_list", "sign_appearance_save", "sign_appearance_delete"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/sign/tests/signing_gaps.rs::pictures_drawn_signatures_and_logos_keep_the_signature_valid", "crates/sign/tests/signing_gaps.rs::hostile_ink_is_refused_or_bounded", "crates/automation/tests/signature_settings.rs::saved_appearances_sign_with_a_picture_a_drawing_and_a_logo", "crates/ui-egui/tests/signature_workflow.rs::sign_as_draws_a_signature_saves_the_appearance_and_locks_the_document"]
+notes = "Text items (name, date, reason, location, DN, labels) plus a graphic on the left: a picture (PNG/JPEG, white paper made transparent, alpha kept as an SMask, scaled to at most 2048 px) or a signature drawn with the pointer in the Sign As dialog (strokes in a 1000-unit box, at most 256 strokes / 8192 points), and a faint logo behind the whole signature (ExtGState ca 0.25). Appearances are saved by name from the Sign As dialog or sign_appearance_save, listed and deleted in Preferences → Signatures, persisted with the app settings (pictures as PNG, 16 MiB total cap) and applied from a combo in the dialog or by name in sign_document appearance. The preview draws the graphic and logo as signed. Limits: the browser build cannot pick a picture file (drawing works); no per-appearance custom fonts."
 
 [[feature]]
 id = "sign.reason-location"
@@ -5944,11 +5944,11 @@ title = "Lock document or fields after signing"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
+status = "shipped"
 commands = ["sign.digital"]
 tools = ["sign_document"]
-evidence = ["crates/sign/tests/pdf.rs::locking_the_document_after_signing_permits_no_changes", "crates/automation/tests/automation.rs::signature_field_locks_through_tools"]
-notes = "sign_document lock_document: true locks every field and permits no later changes (FieldMDP with P 1); the Lock document after signing checkbox in the sign dialog waits for the UI redesign"
+evidence = ["crates/sign/tests/pdf.rs::locking_the_document_after_signing_permits_no_changes", "crates/automation/tests/automation.rs::signature_field_locks_through_tools", "crates/ui-egui/tests/signature_workflow.rs::sign_as_draws_a_signature_saves_the_appearance_and_locks_the_document"]
+notes = "The Sign As dialog has Lock document after signing (with a note on what it means), and sign_document lock_document: true; both lock every field and permit no later changes (FieldMDP with P 1). Field-specific locks come from the field's own /Lock or sign_document lock."
 
 [[feature]]
 id = "sign.pkcs7-detached"
@@ -6031,8 +6031,8 @@ milestone = "M9"
 status = "partial"
 commands = ["sign.timestamp"]
 tools = ["sign_timestamp"]
-evidence = ["crates/sign/tests/pdf.rs::a_document_timestamp_covers_the_file_and_validates", "crates/sign/tests/timestamp_workflow.rs::a_document_timestamp_is_the_value_of_an_invisible_signature_field", "crates/sign/tests/timestamp_workflow.rs::openssl_independently_verifies_the_original_rfc3161_reply", "crates/engine/tests/signature_workflow.rs::timestamp_local_server_saves_reopens_and_reports_trusted_time", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
-notes = "timestamp_document appends an /ETSI.RFC3161 document timestamp as the value of an invisible signature field (DocumentTimestampN, AcroForm /SigFlags 3; it used to be an unreferenced dictionary other validators could not find); validation verifies imprint, token signature, TSA EKU and validity, and reports trusted time only for a trusted TSA. The engine sends the request over a bounded native transport (HTTPS, or HTTP to a literal loopback IP; nonce, policy, 4 MiB, 1-30 s, no redirects, cancellation) and sign_timestamp saves the incremental revision. Checked end to end with pdfcraft-cli run against a loopback OpenSSL TSA, with openssl ts -verify on the reply and on the embedded token. Missing: authenticated TSA profiles, revocation of the TSA chain fetched online, web transport; native UI dialog not yet exercised outside kittest."
+evidence = ["crates/sign/tests/pdf.rs::a_document_timestamp_covers_the_file_and_validates", "crates/sign/tests/timestamp_workflow.rs::a_document_timestamp_is_the_value_of_an_invisible_signature_field", "crates/sign/tests/timestamp_workflow.rs::openssl_independently_verifies_the_original_rfc3161_reply", "crates/engine/tests/signature_workflow.rs::timestamp_local_server_saves_reopens_and_reports_trusted_time", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server", "crates/ui-egui/tests/signature_workflow.rs::native_timestamp_dialog_saves_and_reopens_with_trusted_time", "crates/engine/tests/signature_workflow.rs::a_server_account_sends_basic_credentials_and_needs_its_password"]
+notes = "timestamp_document appends an /ETSI.RFC3161 document timestamp as the value of an invisible signature field (DocumentTimestampN, AcroForm /SigFlags 3); validation verifies imprint, token signature, TSA EKU and validity, and reports trusted time only for a trusted TSA. The engine sends the request over a bounded native transport (HTTPS, or HTTP to a literal loopback IP; nonce, policy, 4 MiB, 1-30 s, no redirects, cancellation), now with authenticated server accounts, and sign_timestamp or the Timestamp document dialog (servers from Preferences → Signatures) saves the incremental revision; Add verification information can add one after the evidence (B-LTA), and fetches revocation for the TSA chain too. Checked end to end with pdfcraft-cli against a loopback OpenSSL TSA. Missing: a web transport (the browser build refuses timestamp requests)."
 
 [[feature]]
 id = "sign.timestamp-servers"
@@ -6040,11 +6040,11 @@ title = "Configure timestamp servers"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
+status = "shipped"
 commands = ["sign.timestamp_servers"]
-tools = ["sign_timestamp"]
-evidence = ["crates/engine/tests/signature_workflow.rs::server_and_verification_dates_are_strictly_validated", "crates/engine/tests/signature_workflow.rs::transport_refuses_untrusted_wrong_mime_and_redirect_responses", "crates/engine/tests/signature_workflow.rs::transport_bounds_response_size_deadline_and_in_flight_cancellation"]
-notes = "Server profiles (name, URL, optional policy OID, 1-30 s timeout, require-trusted-authority) are validated: HTTPS with system roots, HTTP only for literal loopback IPs, no URL credentials, fragments or redirects. No server is configured by default and every request needs explicit consent (allow_network in automation). Missing: authenticated TSA accounts, per-profile TLS pinning."
+tools = ["sign_timestamp", "sign_timestamp_servers_get", "sign_timestamp_servers_set"]
+evidence = ["crates/engine/tests/signature_workflow.rs::server_and_verification_dates_are_strictly_validated", "crates/engine/tests/signature_workflow.rs::transport_refuses_untrusted_wrong_mime_and_redirect_responses", "crates/engine/tests/signature_workflow.rs::transport_bounds_response_size_deadline_and_in_flight_cancellation", "crates/engine/tests/signature_workflow.rs::a_server_account_sends_basic_credentials_and_needs_its_password", "crates/automation/tests/signature_settings.rs::timestamp_servers_with_an_account_keep_the_password_in_the_session", "crates/ui-egui/tests/signature_workflow.rs::configured_servers_persist_and_network_opt_in_is_required_each_time"]
+notes = "Preferences → Signatures → Timestamp servers lists the profiles with Edit, Remove and New server (name, HTTPS URL, optional policy OID, 1-30 s timeout, require-trusted-authority, optional account name); profiles are validated (HTTPS with system roots, HTTP only for literal loopback IPs, no URL credentials, fragments or redirects; at most 32, unique names) and saved with the app settings. An account sends HTTP Basic credentials; its password is held only for the session, never saved or returned by tools, and a 401/403 says the account was refused. The sign dialog, the timestamp workflow and automation (a server name or an inline object) all use the same list. No server is configured by default and every request needs explicit consent. Limits: no per-profile TLS certificate pinning or client-certificate authentication."
 
 [[feature]]
 id = "sign.pades-bt"
@@ -6056,7 +6056,7 @@ status = "partial"
 commands = []
 tools = ["sign_document"]
 evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/timestamp_workflow.rs::response_must_match_nonce_and_requested_policy", "crates/sign/tests/timestamp_workflow.rs::tsa_certificate_requires_critical_exclusive_timestamp_usage", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
-notes = "Sign with an embedded RFC 3161 token (sign_with_timestamp, or sign_document with timestamp_server and allow_network): fresh nonce, policy match, critical exclusive timeStamping EKU, imprint and TSA signature verified; trusted time only for a trusted TSA. Missing: online revocation for the TSA chain; no B-T conformance validator has been run."
+notes = "Sign with an embedded RFC 3161 token (the Sign As dialog's Timestamp choice from Preferences → Signatures, sign_with_timestamp, or sign_document with timestamp_server (a configured name or an object) and allow_network): fresh nonce, policy match, critical exclusive timeStamping EKU, imprint and TSA signature verified; trusted time only for a trusted TSA; authenticated server accounts. Revocation for the TSA chain is fetched online by Add verification information (the timestamp chain is one of the chains it covers). Missing: no B-T conformance validator has been run, so this stays partial."
 
 [[feature]]
 id = "sign.ltv"
@@ -6064,11 +6064,11 @@ title = "Long-term validation (DSS/VRI)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
-commands = ["sign.embed_evidence"]
-tools = ["sign_embed_evidence"]
-evidence = ["crates/sign/tests/pdf.rs::embedding_ltv_evidence_adds_a_dss_and_keeps_signatures_valid", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::verified_local_evidence_preserves_signature_bytes_and_never_grants_trust", "crates/sign/tests/evidence_workflow.rs::timestamp_authority_chains_are_part_of_revocation_coverage", "crates/sign/tests/evidence_workflow.rs::evidence_limits_and_unsigned_documents_fail_before_embedding", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix"]
-notes = "sign_embed_evidence validates caller-supplied local DER (64 files, 2 MiB each, 32 MiB total): certificate/CRL/OCSP syntax, cryptographic association with signer, signature-timestamp and document-timestamp authority chains, and the selected verification time; unrelated or unverifiable evidence is refused before saving, revocation wins over good data, coverage is reported per certificate and role, and certificates are never trusted by import. dss::embed then writes /DSS and /VRI incrementally. Checked end to end with pdfcraft-cli and OpenSSL-made CRL and delegated OCSP evidence. Missing: fetching evidence (AIA/CRLDP), freshness/maximum-age policy (a response without nextUpdate has no upper bound), and evidence newer than the verification time is only accepted when a time inside its window is selected."
+status = "shipped"
+commands = ["sign.embed_evidence", "sign.ltv_enable"]
+tools = ["sign_embed_evidence", "sign_add_verification"]
+evidence = ["crates/sign/tests/pdf.rs::embedding_ltv_evidence_adds_a_dss_and_keeps_signatures_valid", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::verified_local_evidence_preserves_signature_bytes_and_never_grants_trust", "crates/sign/tests/evidence_workflow.rs::timestamp_authority_chains_are_part_of_revocation_coverage", "crates/sign/tests/evidence_workflow.rs::evidence_limits_and_unsigned_documents_fail_before_embedding", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix", "crates/sign/tests/signing_gaps.rs::revocation_freshness_newer_evidence_and_maximum_age", "crates/sign/tests/signing_gaps.rs::a_revision_adding_only_a_dss_is_validation_data", "crates/engine/tests/revocation_fetch.rs::fetched_ocsp_makes_the_signature_long_term_verifiable", "crates/engine/tests/revocation_fetch.rs::a_crl_is_fetched_when_there_is_no_responder", "crates/automation/tests/signature_settings.rs::add_verification_from_local_files_and_a_local_responder"]
+notes = "Add verification information (Signatures panel button, sign.ltv_enable, sign_add_verification) LTV-enables every signature in one incremental save on a background job with progress and cancel: it gathers the signer and timestamp chains, fetches OCSP (AIA, SHA-1 CertID per RFC 5019) or CRLs (CRLDP) where the internet-access policy allows (see sign.ocsp-crl), merges optional local DER files, verifies every piece at now and at the signature's verification time, then writes /DSS and /VRI and optionally a document timestamp. sign_embed_evidence still embeds caller-supplied evidence only (64 files, 2 MiB each), refusing unrelated or unverifiable evidence; revocation wins over good data; coverage is reported per certificate and role; certificates are never trusted by import. Freshness: evidence without nextUpdate counts for Preferences → Signatures → maximum age (0 = no limit), and evidence issued after the verification time vouches for it while the certificate was within its validity when the evidence was issued (a revocation is never undone). A revision that only adds a DSS is classified as validation data."
 
 [[feature]]
 id = "sign.pades-blta"
@@ -6078,9 +6078,9 @@ tier = "P1"
 milestone = "M9"
 status = "partial"
 commands = []
-tools = ["sign_embed_evidence", "sign_timestamp"]
-evidence = ["crates/sign/tests/pdf.rs::sign_then_ltv_then_timestamp_makes_a_b_lta_file", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
-notes = "Building blocks exist: sign, embed verified local evidence (sign_embed_evidence, optionally followed by a document timestamp), then sign_timestamp; earlier signatures stay valid with the store classified as a permitted change. This is not a B-LT/B-LTA conformance claim: no conformance validator has been run, evidence is not fetched, archive renewal policy is absent, and DSS revisions are also labelled metadata/form-fill changes by the classifier."
+tools = ["sign_embed_evidence", "sign_add_verification", "sign_timestamp"]
+evidence = ["crates/sign/tests/pdf.rs::sign_then_ltv_then_timestamp_makes_a_b_lta_file", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server", "crates/sign/tests/signing_gaps.rs::a_revision_adding_only_a_dss_is_validation_data", "crates/engine/tests/revocation_fetch.rs::fetched_ocsp_makes_the_signature_long_term_verifiable"]
+notes = "Add verification information fetches and embeds the evidence (B-LT) and can add a document timestamp in the same save (B-LTA); earlier signatures stay valid with the store classified as validation data (no longer metadata). This is not a B-LT/B-LTA conformance claim: no conformance validator has been run and there is no archive-timestamp renewal policy, so the row stays partial."
 
 [[feature]]
 id = "sign.ocsp-crl"
@@ -6088,11 +6088,11 @@ title = "Revocation checking (OCSP and CRL)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/sign/tests/crypto.rs::crls_verify_and_report_revocation", "crates/sign/tests/crypto.rs::ocsp_responses_verify_and_match_the_certificate", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::a_delegated_ocsp_responder_with_the_signing_eku_verifies_by_name_and_by_key", "crates/sign/tests/evidence_workflow.rs::delegated_ocsp_responders_without_eku_from_another_issuer_or_copying_the_issuer_name_are_refused", "crates/sign/tests/evidence_workflow.rs::openssl_verifies_the_original_delegated_ocsp_response", "crates/sign/tests/evidence_workflow.rs::openssl_verifies_original_crl_and_ocsp_evidence"]
-notes = "RFC 5280 CRLs and RFC 6960 OCSP responses are parsed and verified: responseStatus as ENUMERATED, issuer or delegated responder (embedded certs [0] read at the RFC nesting level, CA-issued, id-kp-OCSPSigning, valid at producedAt; a certificate copying the issuer's name is still treated as a delegate), CertID hash match and validity window; checked against the DSS during validation. OpenSSL independently verifies the original CRL, issuer-signed and delegated OCSP fixtures. Missing: network fetching of fresh evidence, maximum-age policy when nextUpdate is absent, and the OS trust store."
+status = "shipped"
+commands = ["sign.ltv_enable"]
+tools = ["sign_add_verification", "sign_embed_evidence"]
+evidence = ["crates/sign/tests/crypto.rs::crls_verify_and_report_revocation", "crates/sign/tests/crypto.rs::ocsp_responses_verify_and_match_the_certificate", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::a_delegated_ocsp_responder_with_the_signing_eku_verifies_by_name_and_by_key", "crates/sign/tests/evidence_workflow.rs::openssl_verifies_original_crl_and_ocsp_evidence", "crates/sign/tests/signing_gaps.rs::the_ocsp_request_names_the_certificate_by_sha1_cert_id", "crates/sign/tests/signing_gaps.rs::revocation_freshness_newer_evidence_and_maximum_age", "crates/engine/tests/revocation_fetch.rs::the_access_policy_and_the_setting_decide_whether_anything_is_sent", "crates/engine/tests/revocation_fetch.rs::hostile_responses_are_refused_and_the_document_is_untouched", "crates/engine/tests/revocation_fetch.rs::hostile_certificates_with_many_addresses_are_capped"]
+notes = "RFC 5280 CRLs and RFC 6960 OCSP responses are parsed and verified (issuer or delegated responder with id-kp-OCSPSigning, CertID match, validity window, maximum age when nextUpdate is absent) and checked against the DSS during validation. Fresh evidence is fetched only by Add verification information, never when opening or validating: off the UI thread, only with Preferences → Signatures → Fetch revocation information online on and the run's consent, only from addresses the internet-access policy allows (sites it asks about only when the user ticks them; blocked stays blocked), with no redirects, a 1-30 s per-request timeout, a 60 s run deadline, at most 2 OCSP + 2 CRL addresses per certificate, 32 requests, 2 MiB per response and 24 MiB per run; every response is treated as hostile and kept only if it verifies for the certificate. Otherwise local evidence is used. Tested against a local mock responder (good, garbage, oversize, redirect, HTTP error, slow). Limits: no OCSP nonce (public responders answer from caches), no browser transport."
 
 [[feature]]
 id = "sign.validate-all"
@@ -6189,11 +6189,11 @@ title = "Import trusted certificates and set trust"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
-commands = []
-tools = ["sign_trust"]
-evidence = ["crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
-notes = "import .cer/.pem/.der/.p12 through the tool; per-certificate trust settings not yet"
+status = "shipped"
+commands = ["sign.trusted_certificates"]
+tools = ["sign_trust", "sign_trust_list", "sign_trust_set"]
+evidence = ["crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools", "crates/sign/tests/signing_gaps.rs::per_certificate_trust_limits_roots_and_purposes", "crates/automation/tests/signature_settings.rs::per_certificate_trust_through_tools", "crates/ui-egui/tests/signature_workflow.rs::preferences_signatures_lists_trusted_certificates_with_their_trust"]
+notes = "Import .cer/.crt/.pem/.der (Preferences → Signatures → Import certificates…, 4 MiB and 256 certificates per file, or sign_trust). Each trusted certificate has its own trust settings, as on Acrobat's Trust tab: use as a trusted root (off: only signatures made with that very certificate are trusted), signed documents (approval signatures and timestamps) and certified documents. Settings are keyed by SHA-256 fingerprint (pasted with spaces, colons or lowercase), shown as cards with Show certificate… and Remove, persisted with the app settings and honoured by validation, timestamp authority checks and revocation fetching. Limits: no policy-OID restrictions or dynamic-content permissions per certificate."
 
 [[feature]]
 id = "sign.eutl"
@@ -6213,11 +6213,11 @@ title = "Trust the operating system's root certificates"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
-commands = []
+status = "shipped"
+commands = ["sign.trusted_certificates"]
 tools = ["sign_os_trust_get", "sign_os_trust_set", "sign_os_roots", "sign_list"]
-evidence = ["crates/automation/tests/os_trust.rs::os_roots_anchor_signatures_and_certified_documents_only_when_switched_on", "crates/sign/src/os_trust.rs::bundle_skips_malformed_blocks_and_dedupes", "crates/sign/src/os_trust.rs::directory_reads_pem_and_der_skips_bad_and_huge_files", "crates/sign/src/os_trust.rs::an_unterminated_huge_block_is_dropped_not_grown"]
-notes = "Headless. Two settings, off by default as in Acrobat: trust the OS roots for validating signatures (approval signatures, embedded and document timestamps) and for certified documents (certification signatures; effective only with the first on). Roots come from the platform store via rustls-native-certs (macOS keychains, Windows Current User/Local Machine stores, Linux/BSD system CA bundle and directory, SSL_CERT_FILE/SSL_CERT_DIR) or an explicit PEM/DER bundle or directory; malformed entries are skipped and counted, at most 4096 roots, 32 MB bundle, 1 MB per file. Validation builds chains through the enabled roots and reports trust_source (trusted_certificates or operating_system), and says when a chain ends at an OS root whose setting is off. Missing: no Preferences UI and the settings are not persisted (session only); the OS store's per-certificate trust settings and distrust (macOS trust settings purposes, Windows disallowed store, EKU constraints on roots) are not read separately: every root rustls-native-certs returns (those trusted for TLS) is treated alike; not available in the browser (wasm); the RFC 3161 client's require_trusted_authority still uses only the trusted certificates; real Windows/macOS stores untested in CI (tests inject a bundle)."
+evidence = ["crates/automation/tests/os_trust.rs::os_roots_anchor_signatures_and_certified_documents_only_when_switched_on", "crates/sign/src/os_trust.rs::bundle_skips_malformed_blocks_and_dedupes", "crates/sign/src/os_trust.rs::directory_reads_pem_and_der_skips_bad_and_huge_files", "crates/sign/src/os_trust.rs::an_unterminated_huge_block_is_dropped_not_grown", "crates/engine/tests/signature_workflow.rs::signature_preferences_drive_validation_and_trust"]
+notes = "Two settings, off by default as in Acrobat, now visible and saved in Preferences → Signatures (signatures.os_trust_signatures, signatures.os_trust_certified; the second shows only while the first is on, as it only applies then) as well as through sign_os_trust_get/set and prefs_set: trust the OS roots for validating signatures (approval signatures, embedded and document timestamps) and for certified documents. Roots come from the platform store via rustls-native-certs (macOS keychains, Windows stores, Linux/BSD CA bundle and directory, SSL_CERT_FILE/SSL_CERT_DIR) or an explicit bundle; malformed entries are skipped and counted, at most 4096 roots. Validation reports trust_source and the RFC 3161 client's require_trusted_authority uses the same store. Limits: the OS store's own per-certificate trust settings and distrust lists are not read separately (every root rustls-native-certs returns is treated alike); not available in the browser; real Windows/macOS stores untested in CI (tests inject a bundle)."
 
 [[feature]]
 id = "sign.verification-time"
@@ -6225,11 +6225,11 @@ title = "Verification time (signing time, timestamp, now)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "partial"
+status = "shipped"
 commands = ["sign.verification_options"]
 tools = ["sign_verify"]
-evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/pdf.rs::an_untrusted_timestamp_does_not_set_the_validation_time", "crates/sign/tests/pdf.rs::verification_time_is_explicit_and_does_not_upgrade_timestamp_trust", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix"]
-notes = "VerificationTime selects the best available time (trusted timestamp, else claimed signing time), the claimed signing time, now, or a complete UTC date; results report the time and its provenance (trusted_timestamp, claimed_signing_time, chosen_time). A chosen or claimed date never makes an untrusted token trusted. sign_verify is read-only. The Signatures panel keeps best-available validation."
+evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/pdf.rs::an_untrusted_timestamp_does_not_set_the_validation_time", "crates/sign/tests/pdf.rs::verification_time_is_explicit_and_does_not_upgrade_timestamp_trust", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix", "crates/engine/tests/signature_workflow.rs::signature_preferences_drive_validation_and_trust"]
+notes = "Preferences → Signatures → Verify signatures using (signatures.verification_time: secure time (timestamp) else the signing time, the time the signature was created, or the current time) sets the time the Signatures panel, the banner and sign_list validate at; it is saved and applies on change. VerificationTime selects the best available time, the claimed signing time, now, or a complete UTC date (the Verify mode of the signature workflow dialog and sign_verify); results report the time and its provenance (trusted_timestamp, claimed_signing_time, chosen_time). A chosen or claimed date never makes an untrusted token trusted."
 
 [[feature]]
 id = "sign.changes-after-signing"
@@ -6261,11 +6261,11 @@ title = "Compare signed version with the current one"
 area = "H"
 tier = "P1"
 milestone = "M12"
-status = "partial"
-commands = []
+status = "shipped"
+commands = ["sign.compare_signed_version"]
 tools = ["sign_signed_version", "sign_compare_signed_version"]
-evidence = ["crates/sign/tests/pdf.rs::the_signed_version_is_the_bytes_the_signature_covers", "crates/sign/tests/pdf.rs::comparing_the_signed_version_lists_each_change_and_whether_it_is_permitted", "crates/automation/tests/automation.rs::view_and_compare_the_signed_version_through_tools"]
-notes = "Headless only. sign_signed_version writes and/or opens the bytes up to the signature's ByteRange end (View Signed Version; the UI's View signed version button already existed). sign_compare_signed_version lists every object changed or added after signing (the diff validation uses), categorised (page content, comments, form fill with field name and old/new value, changes to locked fields, pages added/removed, signature, metadata, DSS, structure) with added/modified/removed, page and permitted/not permitted under DocMDP P1-3 tightened by FieldMDP, the overall verdict (matches sign_list), plus a word-level Compare Files report between the two versions. Missing: a UI for the comparison (waits for the redesign), removed form fields/objects other than annotations are not itemised, pages are matched by object (a replaced page reads as removed + added), and certificate-encrypted documents are refused."
+evidence = ["crates/sign/tests/pdf.rs::the_signed_version_is_the_bytes_the_signature_covers", "crates/sign/tests/pdf.rs::comparing_the_signed_version_lists_each_change_and_whether_it_is_permitted", "crates/automation/tests/automation.rs::view_and_compare_the_signed_version_through_tools", "crates/ui-egui/tests/signature_workflow.rs::compare_signed_version_opens_side_by_side_with_the_permissions_verdict"]
+notes = "Signatures panel → Compare with current (per signature) or the sign.compare_signed_version command (the expanded signature, else the latest) opens the signed revision beside the current document, runs Compare Files on a worker and opens the side-by-side compare view with synchronised scrolling and change navigation; the Compare panel heads it with a card giving the verdict (nothing changed / every change permitted / some not permitted), the permissions in words, page counts and each kind of change with a permitted mark. Headless: sign_signed_version and sign_compare_signed_version (objects changed or added after signing, categorised, with old/new form values and permitted flags, plus a word-level report). Limits: removed form fields/objects other than annotations are not itemised, a replaced page reads as removed + added, certificate-encrypted documents are refused."
 
 [[feature]]
 id = "sign.verify-on-open"

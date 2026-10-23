@@ -11,6 +11,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod appearance;
 pub mod cms;
 pub mod der;
 pub mod dss;
@@ -39,8 +40,8 @@ pub use der::Time;
 pub use keys::{DigestAlg, PrivateKey, PublicKey};
 pub use lock::{FieldLock, LockAction};
 pub use pdf::{
-    Appearance, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status, TrustPurpose,
-    TrustSource, TrustStore, VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp,
+    Appearance, CertTrust, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status,
+    TrustPurpose, TrustSource, TrustStore, VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp,
     timestamp_document, validate,
 };
 pub use pkcs12::DigitalId;

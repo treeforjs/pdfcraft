@@ -2774,3 +2774,109 @@ compare-page	Moved	Áthelyezve
 	Numbering other files arrives on the web with folder pickers	Más fájlok számozása a mappaválasztóval együtt érkezik a webre
 	Select objects with Edit objects first	Előbb jelöljön ki objektumokat az Objektumok szerkesztése eszközzel
 	Select a text box, or click into a paragraph, first	Előbb jelöljön ki egy szövegdobozt, vagy kattintson egy bekezdésbe
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 esetén bármilyen régit elfogad.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	A megszakított válasz elvész. Az elakadt kérés a beállított határidőnél leáll (legfeljebb 30 másodperc).
+	A certificate file is limited to 4 MiB.	Egy tanúsítványfájl legfeljebb 4 MiB lehet.
+	A chosen or claimed date is not cryptographic proof of time.	A választott vagy állított dátum nem kriptográfiai időbizonyíték.
+	Account name (optional)	Fióknév (nem kötelező)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA-tanúsítványt csak a személyazonosság és az ujjlenyomat független ellenőrzése után vegyen fel a megbízható tanúsítványok közé. Az ellenőrzés kikapcsolása nem megbízható tokent ment; megbízható időt nem igazol.
+	Add logo…	Logó hozzáadása…
+	Add verification information	Ellenőrzési adatok hozzáadása
+	Add verification information…	Ellenőrzési adatok hozzáadása…
+	Allow a timestamp request to the selected server	Időbélyeg-kérés engedélyezése a kiválasztott kiszolgálónak
+	Allow a timestamp request to this server	Időbélyeg-kérés engedélyezése ennek a kiszolgálónak
+	Also from sites that Internet access asks about	Azokról a webhelyekről is, amelyekről az internet-hozzáférés rákérdez
+	Also trust them for certified documents	Tanúsított dokumentumoknál is megbízhatók
+	Appearance name	Megjelenés neve
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	A tiltott webhelyek tiltva maradnak. Csak a tanúsítványok OCSP-válaszolóit és CRL-címeit keresi meg.
+	CRLs	CRL-ek
+	Cancel operation	Művelet megszakítása
+	Certificate and revocation checks at:	Tanúsítvány- és visszavonás-ellenőrzés időpontja:
+	Certified documents	Tanúsított dokumentumok
+	Change logo…	Logó cseréje…
+	Choose a configured timestamp server.	Válasszon egy beállított időbélyeg-kiszolgálót.
+	Choose a server	Válasszon kiszolgálót
+	Choose another picture…	Másik kép választása…
+	Choose picture…	Kép választása…
+	Clear drawing	Rajz törlése
+	Compare signed version	Aláírt verzió összehasonlítása
+	Compare signed version with current	Aláírt verzió összehasonlítása a jelenlegivel
+	Compare with current	Összehasonlítás a jelenlegivel
+	Couldn't compare the signed version: {e}	Az aláírt verzió nem hasonlítható össze: {e}
+	Couldn't use the picture: {e}	A kép nem használható: {e}
+	Current time	Jelenlegi idő
+	Drawn signature	Rajzolt aláírás
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	A bizonyítékok beágyazása önmagában nem biztosít PAdES B-LT/B-LTA megfelelést. A hiányos lefedettséget az ellenőrzés után jelzi.
+	Every certificate's revocation status is now in the document.	Minden tanúsítvány visszavonási állapota most már a dokumentumban van.
+	Every change since signing is permitted by the signature.	Az aláírás óta tett minden változtatást engedélyez az aláírás.
+	Every form field is locked and no later change keeps the signature valid.	Minden űrlapmező zárolva lesz, és semmilyen későbbi változtatás után nem marad érvényes az aláírás.
+	Fetch revocation information online	Visszavonási adatok lekérése online
+	Fetch revocation information online when adding verification information	Visszavonási adatok lekérése online ellenőrzési adatok hozzáadásakor
+	Filling in forms, signing and commenting are permitted (approval signature).	Űrlapkitöltés, aláírás és megjegyzések engedélyezettek (jóváhagyó aláírás).
+	HTTPS URL	HTTPS-cím
+	Import certificates…	Tanúsítványok importálása…
+	Issued by {issuer}, valid to {date}	Kiállító: {issuer}, érvényes: {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	További helyi DER-fájlok (nem kötelező), soronként egy elérési út. A tanúsítványok nem válnak automatikusan megbízhatóvá.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Helyi DER-fájlok, soronként egy elérési út. A tanúsítványok nem válnak automatikusan megbízhatóvá.
+	Lock document after signing	Dokumentum zárolása aláírás után
+	Logo	Logó
+	Manage timestamp servers in Preferences → Signatures.	Az időbélyeg-kiszolgálókat a Beállítások → Aláírások helyen kezelheti.
+	Maximum age of revocation information without an update time	Frissítési idő nélküli visszavonási adatok legnagyobb kora
+	More changes were found than are listed.	Több változás található, mint amennyi fel van sorolva.
+	New server	Új kiszolgáló
+	No changes are permitted.	Semmilyen változtatás nem engedélyezett.
+	No saved appearances yet.	Még nincs mentett megjelenés.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Nincs beállított kiszolgáló. A PdfCraft csak az itt felvett kiszolgálókhoz kapcsolódik.
+	No timestamp	Nincs időbélyeg
+	No trusted certificates yet.	Még nincs megbízható tanúsítvány.
+	Nothing has changed since it was signed.	Az aláírás óta semmi sem változott.
+	OCSP responses	OCSP-válaszok
+	Only filling in forms and signing are permitted.	Csak űrlapkitöltés és aláírás engedélyezett.
+	Only filling in forms, signing and commenting are permitted.	Csak űrlapkitöltés, aláírás és megjegyzések engedélyezettek.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Csak az internet-hozzáférés által engedélyezett webhelyekről. A dokumentum megnyitása vagy ellenőrzése sosem megy online.
+	Open a signed document first	Először nyisson meg egy aláírt dokumentumot
+	Optional policy OID	Szabályzat-OID (nem kötelező)
+	Or UTC date (YYYYMMDDHHmmSSZ)	Vagy UTC-dátum (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Oldalak: aláíráskor {a}, most {b}
+	Picture	Kép
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Képet az asztali alkalmazásban választhat; itt rajzolja meg az aláírását.
+	Remove logo	Logó eltávolítása
+	Remove picture	Kép eltávolítása
+	Require an explicitly trusted timestamp authority	Kifejezetten megbízható időbélyeg-szolgáltató megkövetelése
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} tanúsítványból {covered} visszavonási adatai lekérve.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Mentsen megjelenést az aláírási párbeszédablakból: szöveg, kép vagy rajzolt aláírás és logó.
+	Save appearance	Megjelenés mentése
+	Save result…	Eredmény mentése…
+	Save server	Kiszolgáló mentése
+	Saved appearances	Mentett megjelenések
+	Saved the appearance {name}	A(z) {name} megjelenés mentve
+	Secure time (timestamp), else the signing time	Biztonságos idő (időbélyeg), egyébként az aláírás ideje
+	Show on the left	Bal oldalon
+	Sign here with your mouse, pen or finger	Írja alá itt egérrel, tollal vagy ujjal
+	Signature appearances	Aláírás-megjelenések
+	Signature operation	Aláírási művelet
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Megbízhatók azok az aláírások, amelyek tanúsítványlánca ezek egyikéhez vezet. Válassza ki, mire megbízható mindegyik.
+	Signed documents	Aláírt dokumentumok
+	Signed version of {field} (revision {n})	{field} aláírt verziója ({n}. változat)
+	Some changes since signing are not permitted by the signature.	Az aláírás óta tett egyes változtatásokat az aláírás nem engedélyezi.
+	Text only	Csak szöveg
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Az Aláírások panel ehhez az időponthoz viszonyítva ellenőrzi a tanúsítványokat és a visszavonást. Megbízható időbélyeg nélkül az aláírás ideje csak az aláíró állítása.
+	The current time	A jelenlegi idő
+	The password is kept only until PdfCraft quits, never saved.	A jelszót csak a PdfCraft bezárásáig őrzi, sosem menti.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	A kérés kivonatot tartalmaz, nem a PDF-et. A párbeszédablak megnyitásakor nem történik kérés.
+	The signed version could not be read.	Az aláírt verzió nem olvasható.
+	The time the signature was created	Az aláírás létrehozásának ideje
+	Then add a document timestamp (optional):	Ezután dokumentum-időbélyeg hozzáadása (nem kötelező):
+	Timeout (seconds)	Időkorlát (másodperc)
+	Timestamp (optional)	Időbélyeg (nem kötelező)
+	Trust the operating system's root certificates for signatures	Az operációs rendszer gyökértanúsítványainak elfogadása aláírásokhoz
+	Trusted certificates	Megbízható tanúsítványok
+	Trusted root	Megbízható gyökér
+	Trusted timestamp, else claimed signing time	Megbízható időbélyeg, egyébként az állított aláírási idő
+	Validating and saving…	Ellenőrzés és mentés…
+	Verify signatures using	Aláírások ellenőrzése ehhez képest:
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS-kulcskarika, Windows tanúsítványtár vagy a rendszer CA-csomagja. Alapértelmezés szerint ki.
+	{n} addresses were not contacted because of Internet access settings.	{n} címet az internet-hozzáférési beállítások miatt nem keresett meg.
+	{n} certificates added to your trusted certificates.	{n} tanúsítvány hozzáadva a megbízható tanúsítványokhoz.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	A dokumentumba menti az aláírók tanúsítványláncát és visszavonási állapotát, így az aláírások a tanúsítványok lejárta után is ellenőrizhetők.

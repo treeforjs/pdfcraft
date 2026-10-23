@@ -38,6 +38,13 @@ Your name, organization, unit and email address. They are suggested when you cre
 
 **Default reason** and **Default location** for new signatures. You can change them each time you sign.
 
+- **Verify signatures using**: the timestamp time (else the signing time), the signing time, or the current time.
+- **Fetch revocation information online** when adding verification information, and the **maximum age** of revocation information that has no update time (0 accepts any age).
+- **Trust the operating system's root certificates** for signatures, and also for certified documents.
+- **Trusted certificates**: import certificates and choose, for each, whether it is a trusted root and whether it is trusted for signed and certified documents.
+- **Timestamp servers**: add, edit and remove servers, with an optional account name. Passwords are kept only until PdfCraft quits.
+- **Signature appearances**: the appearances saved from the signing dialog; delete the ones you no longer need.
+
 ## Security
 
 - **JavaScript**: let scripts in documents run, or turn them off.

@@ -59,6 +59,7 @@ pub mod picked_ids;
 mod preflight_ui;
 pub mod prepress_ui;
 mod search_ui;
+mod sign_settings_ui;
 mod sign_ui;
 mod stamps_ui;
 mod standards_ui;
@@ -73,7 +74,10 @@ mod link_ui;
 pub use create_ui::Clip;
 pub use link_ui::{LinkDraft, LinkKind, ViewFit};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
-pub use sign_ui::{DigitalIdEntry, PinField, SigProps, SigPropsTab, SignDraft, SignStep, TokenDraft, property_rows as signature_property_rows};
+pub use sign_ui::{
+    DigitalIdEntry, GraphicChoice, PinField, SigProps, SigPropsTab, SignDraft, SignStep, SignedComparison, TokenDraft,
+    property_rows as signature_property_rows,
+};
 pub use submit_ui::SubmitDraft;
 mod autoscroll;
 mod bidi;
@@ -527,7 +531,10 @@ pub struct PdfCraftApp {
     pub(crate) token_login: Option<pdfcraft_engine::sign::token::Login>,
     pub(crate) token_unlock: Option<sign_ui::TokenUnlock>,
     pub(crate) sign_with_token: bool,
-    pub timestamp_servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer>,
+    /// Compare signed version with current: the object-level changes since that signature,
+    /// shown in the Signatures panel, and whether the next comparison opens side by side.
+    pub signed_comparison: Option<sign_ui::SignedComparison>,
+    pub(crate) side_by_side_after_compare: bool,
     pub signature_workflow: timestamp_ui::SignatureWorkflowState,
     pub signature_run: Option<timestamp_ui::SignatureRun>,
     /// Signatures panel: expanded entries (field names).
@@ -832,7 +839,8 @@ impl PdfCraftApp {
             token_login: None,
             token_unlock: None,
             sign_with_token: false,
-            timestamp_servers: Vec::new(),
+            signed_comparison: None,
+            side_by_side_after_compare: false,
             signature_workflow: timestamp_ui::SignatureWorkflowState::default(),
             signature_run: None,
             sig_expanded: Vec::new(),
@@ -1551,7 +1559,9 @@ impl PdfCraftApp {
                 .collect::<Vec<_>>(),
             "trusted": trusted,
             "url_access": self.session.url_policy(),
-            "timestamp_servers": self.timestamp_servers,
+            "timestamp_servers": self.session.timestamp_servers(),
+            "signature_appearances": self.session.signature_appearances().iter().map(|a| a.to_json()).collect::<Vec<_>>(),
+            "trusted_settings": self.session.saved_certificate_trust_settings(),
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
             // Trust Manager ▸ attachments: the user's allow/deny lists.
@@ -1681,8 +1691,28 @@ impl PdfCraftApp {
             ids.retain(|e| !picked_ids::is_picked(&e.path));
             self.digital_ids = ids;
         }
-        if let Ok(servers) = serde_json::from_value::<Vec<pdfcraft_engine::signature_workflow::TimestampServer>>(v["timestamp_servers"].clone()) {
-            self.timestamp_servers = servers.into_iter().take(32).filter(|s| s.validate().is_ok()).collect();
+        // Untrusted settings: unusable servers and appearances are skipped, the lists capped.
+        if let Some(list) = v["timestamp_servers"].as_array() {
+            let mut servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer> = Vec::new();
+            for s in list.iter().filter_map(|x| serde_json::from_value::<pdfcraft_engine::signature_workflow::TimestampServer>(x.clone()).ok()) {
+                if s.validate().is_ok()
+                    && !servers.iter().any(|o| o.name == s.name)
+                    && servers.len() < pdfcraft_engine::signature_settings::MAX_TIMESTAMP_SERVERS
+                {
+                    servers.push(s);
+                }
+            }
+            let _ = self.session.set_timestamp_servers(servers);
+        }
+        if let Some(list) = v["signature_appearances"].as_array() {
+            for a in list.iter().take(pdfcraft_engine::signature_settings::MAX_APPEARANCES) {
+                match pdfcraft_engine::signature_settings::SavedAppearance::from_json(a) {
+                    Ok(a) => {
+                        let _ = self.session.save_signature_appearance(a);
+                    }
+                    Err(e) => log::warn!("a saved signature appearance couldn't be read: {e}"),
+                }
+            }
         }
         self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
         self.custom_actions = actions_ui::decode(&v["actions"]);
@@ -1704,6 +1734,8 @@ impl PdfCraftApp {
             let certs = pems.iter().filter_map(|p| pdfcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
             self.session.set_trusted_certificates(certs);
         }
+        // After the certificates they belong to.
+        self.session.load_certificate_trust_settings(&v["trusted_settings"]);
     }
 
     /// `true` while any open document still waits for page renders (used by headless capture).

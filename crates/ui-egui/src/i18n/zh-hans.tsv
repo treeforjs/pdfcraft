@@ -2741,3 +2741,109 @@ compare-page	Moved	已移动
 	Select objects with Edit objects first	请先用“编辑对象”选择对象
 	Select a text box, or click into a paragraph, first	请先选择文本框，或点击某个段落
 	That didn't work: an internal error stopped it ({m}).	未能完成：内部错误使其中止（{m}）。
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 表示无论多旧都接受。
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	取消的响应会被丢弃。卡住的请求会在设定的期限（最多 30 秒）停止。
+	A certificate file is limited to 4 MiB.	证书文件不能超过 4 MiB。
+	A chosen or claimed date is not cryptographic proof of time.	选择或声称的日期并不是时间的密码学证明。
+	Account name (optional)	账户名（可选）
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	仅在独立核实其身份和指纹后，才将 TSA 证书添加到受信任证书。关闭此检查会保存不受信任的令牌，并不能确立可信时间。
+	Add logo…	添加徽标…
+	Add verification information	添加验证信息
+	Add verification information…	添加验证信息…
+	Allow a timestamp request to the selected server	允许向所选服务器请求时间戳
+	Allow a timestamp request to this server	允许向此服务器请求时间戳
+	Also from sites that Internet access asks about	也包括互联网访问需要询问的网站
+	Also trust them for certified documents	也信任它们用于已认证的文档
+	Appearance name	外观名称
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	被阻止的网站仍被阻止。只会联系证书的 OCSP 响应程序和 CRL 地址。
+	CRLs	CRL
+	Cancel operation	取消操作
+	Certificate and revocation checks at:	证书和吊销检查时间：
+	Certified documents	已认证的文档
+	Change logo…	更换徽标…
+	Choose a configured timestamp server.	请选择已配置的时间戳服务器。
+	Choose a server	选择服务器
+	Choose another picture…	选择其他图片…
+	Choose picture…	选择图片…
+	Clear drawing	清除绘制
+	Compare signed version	比较已签名版本
+	Compare signed version with current	将已签名版本与当前版本比较
+	Compare with current	与当前版本比较
+	Couldn't compare the signed version: {e}	无法比较已签名版本：{e}
+	Couldn't use the picture: {e}	无法使用该图片：{e}
+	Current time	当前时间
+	Drawn signature	手绘签名
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	嵌入证据本身并不能确立 PAdES B-LT/B-LTA 合规。覆盖不完整会在验证后报告。
+	Every certificate's revocation status is now in the document.	每个证书的吊销状态现已包含在文档中。
+	Every change since signing is permitted by the signature.	签名后的每处更改都是签名允许的。
+	Every form field is locked and no later change keeps the signature valid.	所有表单域都将锁定，之后的任何更改都会使签名失效。
+	Fetch revocation information online	联网获取吊销信息
+	Fetch revocation information online when adding verification information	添加验证信息时联网获取吊销信息
+	Filling in forms, signing and commenting are permitted (approval signature).	允许填写表单、签名和注释（批准签名）。
+	HTTPS URL	HTTPS 网址
+	Import certificates…	导入证书…
+	Issued by {issuer}, valid to {date}	颁发者 {issuer}，有效期至 {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	要一并添加的本地 DER 文件（可选），每行一个路径。证书不会被自动信任。
+	Local DER files, one path per line. Certificates are not automatically trusted.	本地 DER 文件，每行一个路径。证书不会被自动信任。
+	Lock document after signing	签名后锁定文档
+	Logo	徽标
+	Manage timestamp servers in Preferences → Signatures.	在 首选项 → 签名 中管理时间戳服务器。
+	Maximum age of revocation information without an update time	无更新时间的吊销信息的最长有效期
+	More changes were found than are listed.	发现的更改多于列出的更改。
+	New server	新服务器
+	No changes are permitted.	不允许任何更改。
+	No saved appearances yet.	尚无保存的外观。
+	No server is configured. PdfCraft never contacts one unless you add it here.	未配置服务器。除非您在此添加，否则 PdfCraft 不会联系任何服务器。
+	No timestamp	无时间戳
+	No trusted certificates yet.	尚无受信任的证书。
+	Nothing has changed since it was signed.	签名后没有任何更改。
+	OCSP responses	OCSP 响应
+	Only filling in forms and signing are permitted.	仅允许填写表单和签名。
+	Only filling in forms, signing and commenting are permitted.	仅允许填写表单、签名和注释。
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	仅限互联网访问允许的网站。打开或验证文档时从不联网。
+	Open a signed document first	请先打开已签名的文档
+	Optional policy OID	可选策略 OID
+	Or UTC date (YYYYMMDDHHmmSSZ)	或 UTC 日期（YYYYMMDDHHmmSSZ）
+	Pages: {a} when signed, {b} now	页数：签名时 {a}，现在 {b}
+	Picture	图片
+	Pictures can be chosen in the desktop app; draw your signature here instead.	图片可在桌面应用中选择；在此请手绘签名。
+	Remove logo	移除徽标
+	Remove picture	移除图片
+	Require an explicitly trusted timestamp authority	要求明确受信任的时间戳颁发机构
+	Revocation information for {covered} of {needed} certificates was fetched.	已获取 {needed} 个证书中 {covered} 个的吊销信息。
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	可在签名对话框中保存外观：文字、图片或手绘签名，以及徽标。
+	Save appearance	保存外观
+	Save result…	保存结果…
+	Save server	保存服务器
+	Saved appearances	已保存的外观
+	Saved the appearance {name}	已保存外观“{name}”
+	Secure time (timestamp), else the signing time	安全时间（时间戳），否则为签名时间
+	Show on the left	左侧显示
+	Sign here with your mouse, pen or finger	在此用鼠标、触控笔或手指签名
+	Signature appearances	签名外观
+	Signature operation	签名操作
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	证书链可追溯到其中之一的签名将受信任。请选择每个证书的信任用途。
+	Signed documents	已签名的文档
+	Signed version of {field} (revision {n})	{field} 的已签名版本（修订版 {n}）
+	Some changes since signing are not permitted by the signature.	签名后的部分更改不是签名允许的。
+	Text only	仅文字
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	“签名”面板按此时间检查证书和吊销。没有可信时间戳的签名时间只是签名者的自我声明。
+	The current time	当前时间
+	The password is kept only until PdfCraft quits, never saved.	密码仅保留到 PdfCraft 退出，从不保存。
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	请求只包含摘要，不包含 PDF。打开此对话框时不会发送请求。
+	The signed version could not be read.	无法读取已签名版本。
+	The time the signature was created	签名的创建时间
+	Then add a document timestamp (optional):	然后添加文档时间戳（可选）：
+	Timeout (seconds)	超时（秒）
+	Timestamp (optional)	时间戳（可选）
+	Trust the operating system's root certificates for signatures	对签名信任操作系统的根证书
+	Trusted certificates	受信任的证书
+	Trusted root	受信任的根
+	Trusted timestamp, else claimed signing time	可信时间戳，否则为声称的签名时间
+	Validating and saving…	正在验证并保存…
+	Verify signatures using	验证签名时使用
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS 钥匙串、Windows 证书存储或系统 CA 包。默认关闭。
+	{n} addresses were not contacted because of Internet access settings.	由于互联网访问设置，未联系 {n} 个地址。
+	{n} certificates added to your trusted certificates.	已将 {n} 个证书添加到受信任的证书。
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	将签名者的证书链及其吊销状态添加到文档中，使证书过期后仍可检查签名。

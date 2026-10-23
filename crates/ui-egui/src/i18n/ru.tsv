@@ -2692,3 +2692,109 @@ compare-page	Moved	Перемещена
 	Select objects with Edit objects first	Сначала выберите объекты инструментом «Редактировать объекты»
 	Select a text box, or click into a paragraph, first	Сначала выберите текстовое поле или щёлкните в абзаце
 	That didn't work: an internal error stopped it ({m}).	Не получилось: помешала внутренняя ошибка ({m}).
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 — принимать независимо от давности.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Отменённый ответ отбрасывается. Зависший запрос останавливается по заданному сроку (не более 30 секунд).
+	A certificate file is limited to 4 MiB.	Файл сертификата ограничен 4 МиБ.
+	A chosen or claimed date is not cryptographic proof of time.	Выбранная или заявленная дата не является криптографическим доказательством времени.
+	Account name (optional)	Имя учётной записи (необязательно)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Добавляйте сертификат TSA в доверенные только после независимой проверки его подлинности и отпечатка. Отключение проверки сохраняет недоверенный токен; доверенного времени это не даёт.
+	Add logo…	Добавить логотип…
+	Add verification information	Добавить сведения для проверки
+	Add verification information…	Добавить сведения для проверки…
+	Allow a timestamp request to the selected server	Разрешить запрос метки времени к выбранному серверу
+	Allow a timestamp request to this server	Разрешить запрос метки времени к этому серверу
+	Also from sites that Internet access asks about	Также с сайтов, о которых спрашивает доступ в интернет
+	Also trust them for certified documents	Доверять им и для заверенных документов
+	Appearance name	Название оформления
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Заблокированные сайты остаются заблокированными. Запросы идут только к OCSP-ответчикам и адресам CRL сертификатов.
+	CRLs	Списки CRL
+	Cancel operation	Отменить операцию
+	Certificate and revocation checks at:	Проверка сертификатов и отзыва на момент:
+	Certified documents	Заверенные документы
+	Change logo…	Изменить логотип…
+	Choose a configured timestamp server.	Выберите настроенный сервер меток времени.
+	Choose a server	Выберите сервер
+	Choose another picture…	Выбрать другое изображение…
+	Choose picture…	Выбрать изображение…
+	Clear drawing	Очистить рисунок
+	Compare signed version	Сравнить подписанную версию
+	Compare signed version with current	Сравнить подписанную версию с текущей
+	Compare with current	Сравнить с текущей
+	Couldn't compare the signed version: {e}	Не удалось сравнить подписанную версию: {e}
+	Couldn't use the picture: {e}	Не удалось использовать изображение: {e}
+	Current time	Текущее время
+	Drawn signature	Нарисованная подпись
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Встраивание доказательств само по себе не обеспечивает соответствия PAdES B-LT/B-LTA. Неполное покрытие сообщается после проверки.
+	Every certificate's revocation status is now in the document.	Статус отзыва каждого сертификата теперь в документе.
+	Every change since signing is permitted by the signature.	Все изменения после подписания разрешены подписью.
+	Every form field is locked and no later change keeps the signature valid.	Все поля формы блокируются, и любое последующее изменение делает подпись недействительной.
+	Fetch revocation information online	Получать сведения об отзыве из сети
+	Fetch revocation information online when adding verification information	Получать сведения об отзыве из сети при добавлении сведений для проверки
+	Filling in forms, signing and commenting are permitted (approval signature).	Разрешены заполнение форм, подписание и комментарии (утверждающая подпись).
+	HTTPS URL	HTTPS-адрес
+	Import certificates…	Импортировать сертификаты…
+	Issued by {issuer}, valid to {date}	Выдан: {issuer}, действует до {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Локальные файлы DER для добавления (необязательно), по одному пути в строке. Сертификаты не становятся доверенными автоматически.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Локальные файлы DER, по одному пути в строке. Сертификаты не становятся доверенными автоматически.
+	Lock document after signing	Заблокировать документ после подписания
+	Logo	Логотип
+	Manage timestamp servers in Preferences → Signatures.	Серверы меток времени настраиваются в Настройки → Подписи.
+	Maximum age of revocation information without an update time	Максимальный возраст сведений об отзыве без времени обновления
+	More changes were found than are listed.	Найдено больше изменений, чем показано.
+	New server	Новый сервер
+	No changes are permitted.	Изменения не разрешены.
+	No saved appearances yet.	Сохранённых оформлений пока нет.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Сервер не настроен. PdfCraft обращается к серверу, только если вы добавите его здесь.
+	No timestamp	Без метки времени
+	No trusted certificates yet.	Доверенных сертификатов пока нет.
+	Nothing has changed since it was signed.	После подписания ничего не изменилось.
+	OCSP responses	Ответы OCSP
+	Only filling in forms and signing are permitted.	Разрешены только заполнение форм и подписание.
+	Only filling in forms, signing and commenting are permitted.	Разрешены только заполнение форм, подписание и комментарии.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Только с сайтов, разрешённых доступом в интернет. Открытие или проверка документа никогда не выходит в сеть.
+	Open a signed document first	Сначала откройте подписанный документ
+	Optional policy OID	OID политики (необязательно)
+	Or UTC date (YYYYMMDDHHmmSSZ)	Или дата UTC (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Страниц: {a} при подписании, {b} сейчас
+	Picture	Изображение
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Изображения выбираются в настольном приложении; здесь нарисуйте подпись.
+	Remove logo	Удалить логотип
+	Remove picture	Удалить изображение
+	Require an explicitly trusted timestamp authority	Требовать явно доверенный центр меток времени
+	Revocation information for {covered} of {needed} certificates was fetched.	Получены сведения об отзыве для {covered} из {needed} сертификатов.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Сохраните оформление в окне подписания: текст, изображение или нарисованную подпись и логотип.
+	Save appearance	Сохранить оформление
+	Save result…	Сохранить результат…
+	Save server	Сохранить сервер
+	Saved appearances	Сохранённые оформления
+	Saved the appearance {name}	Оформление «{name}» сохранено
+	Secure time (timestamp), else the signing time	Защищённое время (метка времени), иначе время подписания
+	Show on the left	Слева показывать
+	Sign here with your mouse, pen or finger	Распишитесь здесь мышью, пером или пальцем
+	Signature appearances	Оформления подписи
+	Signature operation	Операция с подписью
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Подписи, сертификаты которых ведут к одному из этих, считаются доверенными. Выберите, для чего доверять каждому.
+	Signed documents	Подписанные документы
+	Signed version of {field} (revision {n})	Подписанная версия {field} (редакция {n})
+	Some changes since signing are not permitted by the signature.	Некоторые изменения после подписания не разрешены подписью.
+	Text only	Только текст
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Панель «Подписи» проверяет сертификаты и отзыв на этот момент. Время подписания без доверенной метки времени — лишь заявление подписавшего.
+	The current time	Текущее время
+	The password is kept only until PdfCraft quits, never saved.	Пароль хранится только до выхода из PdfCraft и никогда не сохраняется.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	Запрос содержит хеш, а не PDF. При открытии этого окна запрос не отправляется.
+	The signed version could not be read.	Не удалось прочитать подписанную версию.
+	The time the signature was created	Время создания подписи
+	Then add a document timestamp (optional):	Затем добавить метку времени документа (необязательно):
+	Timeout (seconds)	Тайм-аут (секунды)
+	Timestamp (optional)	Метка времени (необязательно)
+	Trust the operating system's root certificates for signatures	Доверять корневым сертификатам операционной системы для подписей
+	Trusted certificates	Доверенные сертификаты
+	Trusted root	Доверенный корень
+	Trusted timestamp, else claimed signing time	Доверенная метка времени, иначе заявленное время подписания
+	Validating and saving…	Проверка и сохранение…
+	Verify signatures using	Проверять подписи по
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Связка ключей macOS, хранилище сертификатов Windows или системный набор CA. По умолчанию выключено.
+	{n} addresses were not contacted because of Internet access settings.	Из-за настроек доступа в интернет не запрошено адресов: {n}.
+	{n} certificates added to your trusted certificates.	Добавлено в доверенные сертификаты: {n}.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Добавляет в документ цепочки сертификатов подписавших и их статус отзыва, чтобы подписи можно было проверить и после истечения срока сертификатов.

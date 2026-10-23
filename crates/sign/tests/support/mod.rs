@@ -53,7 +53,37 @@ pub fn chain() -> (DigitalId, DigitalId) {
     (issuer, leaf)
 }
 
+/// [`chain`] with a signer certificate that names OCSP responders (Authority Information
+/// Access) and CRL distribution points at `ocsp` and `crl`.
+pub fn chain_with_urls(ocsp: &[&str], crl: &[&str]) -> (DigitalId, DigitalId) {
+    let (issuer, mut leaf) = chain();
+    let root_name = issuer.certificate.subject.clone();
+    let leaf_name = Name::build("Synthetic Evidence Signer", "", "PdfCraft Tests", "", "");
+    let access: Vec<Vec<u8>> =
+        ocsp.iter().map(|u| der::seq(&[&der::oid("1.3.6.1.5.5.7.48.1"), &der::tlv(der::tag::ctx_prim(6), u.as_bytes())])).collect();
+    let access: Vec<&[u8]> = access.iter().map(Vec::as_slice).collect();
+    let aia = der::seq(&[&der::oid("1.3.6.1.5.5.7.1.1"), &der::octets(&der::seq(&access))]);
+    let points: Vec<Vec<u8>> =
+        crl.iter().map(|u| der::seq(&[&der::explicit(0, &der::explicit(0, &der::tlv(der::tag::ctx_prim(6), u.as_bytes())))])).collect();
+    let points: Vec<&[u8]> = points.iter().map(Vec::as_slice).collect();
+    let crldp = der::seq(&[&der::oid("2.5.29.31"), &der::octets(&der::seq(&points))]);
+    let mut extra = Vec::new();
+    if !ocsp.is_empty() {
+        extra.push(aia);
+    }
+    if !crl.is_empty() {
+        extra.push(crldp);
+    }
+    leaf.certificate = issued_with(&leaf.key, &leaf_name, &issuer.key, &root_name, 101, false, &extra);
+    leaf.chain = vec![issuer.certificate.clone()];
+    (issuer, leaf)
+}
+
 fn issued(key: &PrivateKey, name: &Name, issuer: &PrivateKey, issuer_name: &Name, serial: u64, ca: bool) -> Certificate {
+    issued_with(key, name, issuer, issuer_name, serial, ca, &[])
+}
+
+fn issued_with(key: &PrivateKey, name: &Name, issuer: &PrivateKey, issuer_name: &Name, serial: u64, ca: bool, extra: &[Vec<u8>]) -> Certificate {
     let digest = issuer.preferred_digest();
     let alg = issuer.signature_algorithm(digest);
     let constraints = if ca { der::seq(&[&der::boolean(true)]) } else { der::seq(&[]) };
@@ -68,7 +98,11 @@ fn issued(key: &PrivateKey, name: &Name, issuer: &PrivateKey, issuer_name: &Name
         &validity,
         &name.raw,
         &key.public_key().spki(),
-        &der::explicit(3, &der::seq(&[&constraints, &usage])),
+        &der::explicit(3, &{
+            let mut exts: Vec<&[u8]> = vec![&constraints, &usage];
+            exts.extend(extra.iter().map(Vec::as_slice));
+            der::seq(&exts)
+        }),
     ]);
     let signature = issuer.sign(digest, &tbs).unwrap();
     Certificate::parse(&der::seq(&[&tbs, &alg, &der::bit_string(&signature)])).unwrap()

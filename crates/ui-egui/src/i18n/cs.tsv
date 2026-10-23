@@ -2800,3 +2800,109 @@ compare-page	Moved	Přesunutá
 	Numbering other files arrives on the web with folder pickers	Číslování dalších souborů přijde na web spolu s výběrem složek
 	Select objects with Edit objects first	Nejprve vyberte objekty nástrojem Upravit objekty
 	Select a text box, or click into a paragraph, first	Nejprve vyberte textové pole nebo klikněte do odstavce
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 je přijme bez ohledu na stáří.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Zrušená odpověď se zahodí. Zablokovaný požadavek skončí v nastaveném limitu (nejvýše 30 sekund).
+	A certificate file is limited to 4 MiB.	Soubor certifikátu je omezen na 4 MiB.
+	A chosen or claimed date is not cryptographic proof of time.	Zvolené nebo deklarované datum není kryptografickým důkazem času.
+	Account name (optional)	Název účtu (volitelné)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Certifikát TSA přidejte mezi důvěryhodné certifikáty až po nezávislém ověření jeho identity a otisku. Vypnutí této kontroly uloží nedůvěryhodný token; důvěryhodný čas tím nevznikne.
+	Add logo…	Přidat logo…
+	Add verification information	Přidat informace pro ověření
+	Add verification information…	Přidat informace pro ověření…
+	Allow a timestamp request to the selected server	Povolit požadavek na časové razítko u vybraného serveru
+	Allow a timestamp request to this server	Povolit požadavek na časové razítko u tohoto serveru
+	Also from sites that Internet access asks about	Také ze stránek, na které se přístup k internetu ptá
+	Also trust them for certified documents	Důvěřovat jim i u certifikovaných dokumentů
+	Appearance name	Název vzhledu
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Blokované stránky zůstávají blokované. Kontaktují se jen OCSP respondéry a adresy CRL certifikátů.
+	CRLs	Seznamy CRL
+	Cancel operation	Zrušit operaci
+	Certificate and revocation checks at:	Kontrola certifikátů a odvolání k:
+	Certified documents	Certifikované dokumenty
+	Change logo…	Změnit logo…
+	Choose a configured timestamp server.	Vyberte nastavený server časových razítek.
+	Choose a server	Vyberte server
+	Choose another picture…	Vybrat jiný obrázek…
+	Choose picture…	Vybrat obrázek…
+	Clear drawing	Vymazat kresbu
+	Compare signed version	Porovnat podepsanou verzi
+	Compare signed version with current	Porovnat podepsanou verzi s aktuální
+	Compare with current	Porovnat s aktuální
+	Couldn't compare the signed version: {e}	Podepsanou verzi nelze porovnat: {e}
+	Couldn't use the picture: {e}	Obrázek nelze použít: {e}
+	Current time	Aktuální čas
+	Drawn signature	Nakreslený podpis
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Vložení důkazů samo o sobě nezajišťuje shodu s PAdES B-LT/B-LTA. Neúplné pokrytí se ohlásí po ověření.
+	Every certificate's revocation status is now in the document.	Stav odvolání každého certifikátu je nyní v dokumentu.
+	Every change since signing is permitted by the signature.	Každou změnu od podpisu podpis povoluje.
+	Every form field is locked and no later change keeps the signature valid.	Všechna pole formuláře se zamknou a žádná pozdější změna nezachová platnost podpisu.
+	Fetch revocation information online	Načítat informace o odvolání online
+	Fetch revocation information online when adding verification information	Při přidávání informací pro ověření načítat informace o odvolání online
+	Filling in forms, signing and commenting are permitted (approval signature).	Je povoleno vyplňování formulářů, podepisování a komentování (schvalovací podpis).
+	HTTPS URL	Adresa HTTPS
+	Import certificates…	Importovat certifikáty…
+	Issued by {issuer}, valid to {date}	Vydal {issuer}, platný do {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Místní soubory DER k přidání (volitelné), jedna cesta na řádek. Certifikáty se automaticky nestávají důvěryhodnými.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Místní soubory DER, jedna cesta na řádek. Certifikáty se automaticky nestávají důvěryhodnými.
+	Lock document after signing	Po podepsání zamknout dokument
+	Logo	Logotyp
+	Manage timestamp servers in Preferences → Signatures.	Servery časových razítek spravujte v Předvolby → Podpisy.
+	Maximum age of revocation information without an update time	Maximální stáří informací o odvolání bez času aktualizace
+	More changes were found than are listed.	Bylo nalezeno více změn, než je uvedeno.
+	New server	Nový server
+	No changes are permitted.	Nejsou povoleny žádné změny.
+	No saved appearances yet.	Zatím žádné uložené vzhledy.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Není nastaven žádný server. PdfCraft se k žádnému nepřipojí, dokud ho sem nepřidáte.
+	No timestamp	Bez časového razítka
+	No trusted certificates yet.	Zatím žádné důvěryhodné certifikáty.
+	Nothing has changed since it was signed.	Od podpisu se nic nezměnilo.
+	OCSP responses	Odpovědi OCSP
+	Only filling in forms and signing are permitted.	Povoleno je jen vyplňování formulářů a podepisování.
+	Only filling in forms, signing and commenting are permitted.	Povoleno je jen vyplňování formulářů, podepisování a komentování.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Jen ze stránek, které přístup k internetu povoluje. Otevření ani ověření dokumentu nikdy nejde online.
+	Open a signed document first	Nejprve otevřete podepsaný dokument
+	Optional policy OID	Volitelné OID zásady
+	Or UTC date (YYYYMMDDHHmmSSZ)	Nebo datum UTC (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Stránky: {a} při podpisu, {b} nyní
+	Picture	Obrázek
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Obrázky lze vybrat v desktopové aplikaci; zde podpis nakreslete.
+	Remove logo	Odebrat logo
+	Remove picture	Odebrat obrázek
+	Require an explicitly trusted timestamp authority	Vyžadovat výslovně důvěryhodnou autoritu časových razítek
+	Revocation information for {covered} of {needed} certificates was fetched.	Informace o odvolání byly načteny pro {covered} z {needed} certifikátů.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Uložte vzhled z dialogu podepisování: jeho text, obrázek nebo nakreslený podpis a logo.
+	Save appearance	Uložit vzhled
+	Save result…	Uložit výsledek…
+	Save server	Uložit server
+	Saved appearances	Uložené vzhledy
+	Saved the appearance {name}	Vzhled {name} byl uložen
+	Secure time (timestamp), else the signing time	Bezpečný čas (časové razítko), jinak čas podpisu
+	Show on the left	Zobrazit vlevo
+	Sign here with your mouse, pen or finger	Podepište se zde myší, perem nebo prstem
+	Signature appearances	Vzhledy podpisu
+	Signature operation	Operace s podpisem
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Podpisům, jejichž certifikáty vedou k některému z těchto, se důvěřuje. Zvolte, k čemu je každý důvěryhodný.
+	Signed documents	Podepsané dokumenty
+	Signed version of {field} (revision {n})	Podepsaná verze {field} (revize {n})
+	Some changes since signing are not permitted by the signature.	Některé změny od podpisu podpis nepovoluje.
+	Text only	Jen text
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Panel Podpisy kontroluje certifikáty a odvolání k tomuto času. Čas podpisu bez důvěryhodného časového razítka je jen tvrzení podepisujícího.
+	The current time	Aktuální čas
+	The password is kept only until PdfCraft quits, never saved.	Heslo se uchovává jen do ukončení PdfCraft a nikdy se neukládá.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	Požadavek obsahuje otisk, ne PDF. Při otevření tohoto dialogu se žádný požadavek neodešle.
+	The signed version could not be read.	Podepsanou verzi nelze přečíst.
+	The time the signature was created	Čas vytvoření podpisu
+	Then add a document timestamp (optional):	Potom přidat časové razítko dokumentu (volitelné):
+	Timeout (seconds)	Časový limit (sekundy)
+	Timestamp (optional)	Časové razítko (volitelné)
+	Trust the operating system's root certificates for signatures	Důvěřovat kořenovým certifikátům operačního systému u podpisů
+	Trusted certificates	Důvěryhodné certifikáty
+	Trusted root	Důvěryhodný kořen
+	Trusted timestamp, else claimed signing time	Důvěryhodné časové razítko, jinak deklarovaný čas podpisu
+	Validating and saving…	Ověřování a ukládání…
+	Verify signatures using	Ověřovat podpisy podle
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Klíčenka macOS, úložiště certifikátů Windows nebo systémový balík CA. Ve výchozím stavu vypnuto.
+	{n} addresses were not contacted because of Internet access settings.	{n} adres nebylo kontaktováno kvůli nastavení přístupu k internetu.
+	{n} certificates added to your trusted certificates.	Mezi důvěryhodné certifikáty bylo přidáno certifikátů: {n}.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Přidá do dokumentu řetězce certifikátů podepisujících a jejich stav odvolání, aby šlo podpisy ověřit i po vypršení certifikátů.

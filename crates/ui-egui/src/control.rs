@@ -623,7 +623,7 @@ impl Host for crate::PdfCraftApp {
             "progress": self.progress_notice.as_ref().map(|p| json!({ "label": p.label, "fraction": p.fraction })),
             "password_prompt": self.password_prompt.is_some(),
             "close_prompt": self.close_request.is_some(),
-            "timestamp_servers": self.timestamp_servers,
+            "timestamp_servers": self.session.timestamp_servers(),
             "signature_workflow": {"mode":format!("{:?}",self.signature_workflow.mode),"selected":self.signature_workflow.selected,
                 "allow_network":self.signature_workflow.allow_network,"verification_time":self.signature_workflow.verification_time,
                 "certificates":self.signature_workflow.certificates,"crls":self.signature_workflow.crls,"ocsps":self.signature_workflow.ocsps,
@@ -633,6 +633,17 @@ impl Host for crate::PdfCraftApp {
         });
         // Kept out of the json! above, which is at the macro recursion limit.
         if let Some(m) = state.as_object_mut() {
+            m.insert(
+                "signing".into(),
+                json!({
+                    "lock_document": self.sign_draft.as_ref().map(|d| d.lock_document),
+                    "graphic": self.sign_draft.as_ref().map(|d| d.graphic),
+                    "saved_appearance": self.sign_draft.as_ref().and_then(|d| d.saved.clone()),
+                    "appearances": self.session.signature_appearances().iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+                    "signed_comparison": self.signed_comparison.as_ref().map(|c| json!({"doc": c.doc.0, "signed": c.signed.0, "field": c.field,
+                        "modified": c.result.modified(), "permitted": c.result.permitted()})),
+                }),
+            );
             m.insert("output_preview".into(), json!((self.right == Some(crate::RightPanel::OutputPreview)).then(|| self.output_preview_state())));
             m.insert("ink_manager".into(), json!((self.dialog == Some(crate::Dialog::InkManager)).then(|| self.ink_manager_state())));
             // Tags / Order panels and the Reading Order tool: the selected tag (obj) and region.

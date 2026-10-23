@@ -187,6 +187,46 @@ pub const SCHEMA: &[Spec] = &[
     spec("signatures.reason", "signatures", TEXT, "session", true, "The reason a new signature starts with (empty: none)."),
     spec("signatures.location", "signatures", TEXT, "session", true, "The location a new signature starts with (empty: none)."),
     spec(
+        "signatures.verification_time",
+        "signatures",
+        Kind::Choice(&crate::signature_settings::VerifyAt::IDS),
+        "session",
+        true,
+        "The time the Signatures panel checks certificates and revocation at: best (a trusted timestamp, else the claimed signing time; the default), signing (the claimed signing time) or current (now).",
+    ),
+    spec(
+        "signatures.os_trust_signatures",
+        "signatures",
+        Kind::Bool,
+        "session",
+        true,
+        "Trust the operating system's root certificates for validating signatures and timestamps (default false).",
+    ),
+    spec(
+        "signatures.os_trust_certified",
+        "signatures",
+        Kind::Bool,
+        "session",
+        true,
+        "Trust the operating system's root certificates for validating certified documents; needs os_trust_signatures (default false).",
+    ),
+    spec(
+        "signatures.fetch_revocation",
+        "signatures",
+        Kind::Bool,
+        "session",
+        true,
+        "Fetch revocation information (OCSP, CRLs) online when adding verification information, from sites Internet access allows (default true).",
+    ),
+    spec(
+        "signatures.revocation_max_age_hours",
+        "signatures",
+        Kind::Integer { min: 0, max: crate::signature_settings::MAX_REVOCATION_AGE_HOURS as i64 },
+        "session",
+        true,
+        "Revocation information without a next-update time counts for this many hours after it was issued (0: no limit; the default).",
+    ),
+    spec(
         "security.javascript",
         "security",
         Kind::Bool,
@@ -432,6 +472,11 @@ impl Session {
             "identity.email" => json!(p.identity.email),
             "signatures.reason" => json!(p.signing_reason),
             "signatures.location" => json!(p.signing_location),
+            "signatures.verification_time" => json!(self.verify_at().id()),
+            "signatures.os_trust_signatures" => json!(self.os_trust_settings().signatures),
+            "signatures.os_trust_certified" => json!(self.os_trust_settings().certified_documents),
+            "signatures.fetch_revocation" => json!(self.fetch_revocation()),
+            "signatures.revocation_max_age_hours" => json!(self.revocation_max_age_hours()),
             "security.javascript" => json!(self.javascript()),
             "security.internet_access" => json!(self.url_policy().mode.id()),
             "security.unlisted_sites" => json!(self.url_policy().default_action.id()),
@@ -499,6 +544,23 @@ impl Session {
             "identity.email" => p.identity.email = text(),
             "signatures.reason" => p.signing_reason = text(),
             "signatures.location" => p.signing_location = text(),
+            "signatures.verification_time" => {
+                self.set_verify_at(crate::signature_settings::VerifyAt::from_id(&text()).ok_or_else(|| wrong(key, "best, signing or current"))?)
+            }
+            "signatures.os_trust_signatures" | "signatures.os_trust_certified" => {
+                let mut t = self.os_trust_settings();
+                if key == "signatures.os_trust_signatures" {
+                    t.signatures = flag();
+                } else {
+                    t.certified_documents = flag();
+                }
+                // Unchanged settings don't read the store again.
+                if t != self.os_trust_settings() {
+                    self.set_os_trust(t).map_err(|e| format!("{key}: {e}"))?;
+                }
+            }
+            "signatures.fetch_revocation" => self.set_fetch_revocation(flag()),
+            "signatures.revocation_max_age_hours" => self.set_revocation_max_age_hours(int()),
             "accessibility.text_scale" => p.text_scale = (v.as_f64().unwrap_or(1.0) as f32).clamp(MIN_TEXT_SCALE, MAX_TEXT_SCALE),
             "accessibility.reduce_motion" => p.reduce_motion = flag(),
             "accessibility.high_contrast" => p.high_contrast = flag(),

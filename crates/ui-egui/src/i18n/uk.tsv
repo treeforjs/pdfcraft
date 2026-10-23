@@ -2799,3 +2799,109 @@ compare-page	Moved	Переміщена
 	Numbering other files arrives on the web with folder pickers	Нумерація інших файлів з'явиться у веб-версії разом із вибором тек
 	Select objects with Edit objects first	Спершу виберіть об'єкти інструментом «Редагувати об'єкти»
 	Select a text box, or click into a paragraph, first	Спершу виберіть текстове поле або клацніть в абзаці
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 — приймати незалежно від давності.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Скасовану відповідь відкидається. Завислий запит зупиняється за встановленим терміном (не більше 30 секунд).
+	A certificate file is limited to 4 MiB.	Файл сертифіката обмежено 4 МіБ.
+	A chosen or claimed date is not cryptographic proof of time.	Вибрана або заявлена дата не є криптографічним доказом часу.
+	Account name (optional)	Ім’я облікового запису (необов’язково)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Додавайте сертифікат TSA до довірених лише після незалежної перевірки його особи та відбитка. Вимкнення перевірки зберігає недовірений токен; довіреного часу це не дає.
+	Add logo…	Додати логотип…
+	Add verification information	Додати відомості для перевірки
+	Add verification information…	Додати відомості для перевірки…
+	Allow a timestamp request to the selected server	Дозволити запит позначки часу до вибраного сервера
+	Allow a timestamp request to this server	Дозволити запит позначки часу до цього сервера
+	Also from sites that Internet access asks about	Також із сайтів, щодо яких питає доступ до інтернету
+	Also trust them for certified documents	Довіряти їм і для засвідчених документів
+	Appearance name	Назва вигляду
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Заблоковані сайти лишаються заблокованими. Запити йдуть лише до OCSP-відповідачів і адрес CRL сертифікатів.
+	CRLs	Списки CRL
+	Cancel operation	Скасувати операцію
+	Certificate and revocation checks at:	Перевірка сертифікатів і відкликання на момент:
+	Certified documents	Засвідчені документи
+	Change logo…	Змінити логотип…
+	Choose a configured timestamp server.	Виберіть налаштований сервер позначок часу.
+	Choose a server	Виберіть сервер
+	Choose another picture…	Вибрати інше зображення…
+	Choose picture…	Вибрати зображення…
+	Clear drawing	Очистити малюнок
+	Compare signed version	Порівняти підписану версію
+	Compare signed version with current	Порівняти підписану версію з поточною
+	Compare with current	Порівняти з поточною
+	Couldn't compare the signed version: {e}	Не вдалося порівняти підписану версію: {e}
+	Couldn't use the picture: {e}	Не вдалося використати зображення: {e}
+	Current time	Поточний час
+	Drawn signature	Намальований підпис
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Вбудовування доказів саме по собі не забезпечує відповідності PAdES B-LT/B-LTA. Неповне покриття повідомляється після перевірки.
+	Every certificate's revocation status is now in the document.	Стан відкликання кожного сертифіката тепер у документі.
+	Every change since signing is permitted by the signature.	Усі зміни після підписання дозволені підписом.
+	Every form field is locked and no later change keeps the signature valid.	Усі поля форми блокуються, і будь-яка подальша зміна робить підпис недійсним.
+	Fetch revocation information online	Отримувати відомості про відкликання з мережі
+	Fetch revocation information online when adding verification information	Отримувати відомості про відкликання з мережі під час додавання відомостей для перевірки
+	Filling in forms, signing and commenting are permitted (approval signature).	Дозволено заповнення форм, підписання і коментування (затверджувальний підпис).
+	HTTPS URL	HTTPS-адреса
+	Import certificates…	Імпортувати сертифікати…
+	Issued by {issuer}, valid to {date}	Видав: {issuer}, чинний до {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Локальні файли DER для додавання (необов’язково), по одному шляху в рядку. Сертифікати не стають довіреними автоматично.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Локальні файли DER, по одному шляху в рядку. Сертифікати не стають довіреними автоматично.
+	Lock document after signing	Заблокувати документ після підписання
+	Logo	Логотип
+	Manage timestamp servers in Preferences → Signatures.	Сервери позначок часу налаштовуються в Параметри → Підписи.
+	Maximum age of revocation information without an update time	Максимальний вік відомостей про відкликання без часу оновлення
+	More changes were found than are listed.	Знайдено більше змін, ніж показано.
+	New server	Новий сервер
+	No changes are permitted.	Зміни не дозволені.
+	No saved appearances yet.	Збережених виглядів ще немає.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Сервер не налаштовано. PdfCraft звертається до сервера, лише якщо ви додасте його тут.
+	No timestamp	Без позначки часу
+	No trusted certificates yet.	Довірених сертифікатів ще немає.
+	Nothing has changed since it was signed.	Після підписання нічого не змінилося.
+	OCSP responses	Відповіді OCSP
+	Only filling in forms and signing are permitted.	Дозволено лише заповнення форм і підписання.
+	Only filling in forms, signing and commenting are permitted.	Дозволено лише заповнення форм, підписання і коментування.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Лише із сайтів, дозволених доступом до інтернету. Відкриття чи перевірка документа ніколи не виходить у мережу.
+	Open a signed document first	Спершу відкрийте підписаний документ
+	Optional policy OID	OID політики (необов’язково)
+	Or UTC date (YYYYMMDDHHmmSSZ)	Або дата UTC (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Сторінок: {a} під час підписання, {b} зараз
+	Picture	Зображення
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Зображення вибираються в настільній програмі; тут намалюйте підпис.
+	Remove logo	Вилучити логотип
+	Remove picture	Вилучити зображення
+	Require an explicitly trusted timestamp authority	Вимагати явно довірений центр позначок часу
+	Revocation information for {covered} of {needed} certificates was fetched.	Отримано відомості про відкликання для {covered} з {needed} сертифікатів.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Збережіть вигляд у вікні підписання: текст, зображення або намальований підпис і логотип.
+	Save appearance	Зберегти вигляд
+	Save result…	Зберегти результат…
+	Save server	Зберегти сервер
+	Saved appearances	Збережені вигляди
+	Saved the appearance {name}	Вигляд «{name}» збережено
+	Secure time (timestamp), else the signing time	Захищений час (позначка часу), інакше час підписання
+	Show on the left	Ліворуч показувати
+	Sign here with your mouse, pen or finger	Розпишіться тут мишею, пером або пальцем
+	Signature appearances	Вигляди підпису
+	Signature operation	Операція з підписом
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Підписи, сертифікати яких ведуть до одного з цих, вважаються довіреними. Виберіть, для чого довіряти кожному.
+	Signed documents	Підписані документи
+	Signed version of {field} (revision {n})	Підписана версія {field} (редакція {n})
+	Some changes since signing are not permitted by the signature.	Деякі зміни після підписання не дозволені підписом.
+	Text only	Лише текст
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Панель «Підписи» перевіряє сертифікати й відкликання на цей момент. Час підписання без довіреної позначки часу — лише заява того, хто підписав.
+	The current time	Поточний час
+	The password is kept only until PdfCraft quits, never saved.	Пароль зберігається лише до виходу з PdfCraft і ніколи не записується.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	Запит містить геш, а не PDF. Під час відкриття цього вікна запит не надсилається.
+	The signed version could not be read.	Не вдалося прочитати підписану версію.
+	The time the signature was created	Час створення підпису
+	Then add a document timestamp (optional):	Потім додати позначку часу документа (необов’язково):
+	Timeout (seconds)	Тайм-аут (секунди)
+	Timestamp (optional)	Позначка часу (необов’язково)
+	Trust the operating system's root certificates for signatures	Довіряти кореневим сертифікатам операційної системи для підписів
+	Trusted certificates	Довірені сертифікати
+	Trusted root	Довірений корінь
+	Trusted timestamp, else claimed signing time	Довірена позначка часу, інакше заявлений час підписання
+	Validating and saving…	Перевірка і збереження…
+	Verify signatures using	Перевіряти підписи за
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Зв’язка ключів macOS, сховище сертифікатів Windows або системний набір CA. Типово вимкнено.
+	{n} addresses were not contacted because of Internet access settings.	Через налаштування доступу до інтернету не запитано адрес: {n}.
+	{n} certificates added to your trusted certificates.	Додано до довірених сертифікатів: {n}.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Додає до документа ланцюжки сертифікатів підписантів і їхній стан відкликання, щоб підписи можна було перевірити й після спливу строку сертифікатів.

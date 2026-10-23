@@ -110,7 +110,15 @@ impl Page {
                 &["forms.highlight_fields", "forms.highlight_color", "forms.required_color", "forms.flatten_fill_sign", "forms.date_format"]
             }
             Page::Identity => &["identity.name", "identity.organization", "identity.unit", "identity.email"],
-            Page::Signatures => &["signatures.reason", "signatures.location"],
+            Page::Signatures => &[
+                "signatures.reason",
+                "signatures.location",
+                "signatures.verification_time",
+                "signatures.fetch_revocation",
+                "signatures.revocation_max_age_hours",
+                "signatures.os_trust_signatures",
+                "signatures.os_trust_certified",
+            ],
             Page::Security => &["security.javascript", "security.internet_access", "security.unlisted_sites"],
             Page::Accessibility => &["accessibility.text_scale", "accessibility.reduce_motion", "accessibility.high_contrast"],
             Page::Color => &[
@@ -178,6 +186,11 @@ fn label(key: &str) -> &'static str {
         "identity.email" => tl!("Email Address"),
         "signatures.reason" => tl!("Default reason"),
         "signatures.location" => tl!("Default location"),
+        "signatures.verification_time" => tl!("Verify signatures using"),
+        "signatures.fetch_revocation" => tl!("Fetch revocation information online when adding verification information"),
+        "signatures.revocation_max_age_hours" => tl!("Maximum age of revocation information without an update time"),
+        "signatures.os_trust_signatures" => tl!("Trust the operating system's root certificates for signatures"),
+        "signatures.os_trust_certified" => tl!("Also trust them for certified documents"),
         "security.javascript" => tl!("Enable Acrobat JavaScript"),
         "security.internet_access" => tl!("Internet access from PDFs"),
         "security.unlisted_sites" => tl!("Sites without a rule"),
@@ -222,6 +235,11 @@ fn keywords(key: &str) -> &'static str {
         "identity.email" => "identity email address",
         "signatures.reason" => "signature signing reason",
         "signatures.location" => "signature signing location place",
+        "signatures.verification_time" => "signature verification validation time timestamp current",
+        "signatures.fetch_revocation" => "signature revocation ocsp crl ltv online network",
+        "signatures.revocation_max_age_hours" => "signature revocation ocsp crl freshness age",
+        "signatures.os_trust_signatures" => "signature trust operating system root certificates keychain windows store",
+        "signatures.os_trust_certified" => "signature trust certified certification operating system root",
         "security.javascript" => "javascript scripts security",
         "security.internet_access" => "internet web urls links trust security network",
         "security.unlisted_sites" => "internet web sites hosts trust ask",
@@ -413,6 +431,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
                     }
                     for key in page.rows() {
                         row(ui, app, t, key);
+                    }
+                    if page == Page::Signatures {
+                        crate::sign_settings_ui::section(ui, app, t);
                     }
                 } else {
                     let found = search(&query);
@@ -754,6 +775,40 @@ fn row(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static str) 
         "identity.email" => text(ui, app, t, key, Some(tl!("Your identity is suggested when you create a digital ID."))),
         "signatures.reason" => text(ui, app, t, key, None),
         "signatures.location" => text(ui, app, t, key, Some(tl!("New signatures start with these; you can change them when signing."))),
+        "signatures.verification_time" => choice(
+            ui,
+            app,
+            t,
+            key,
+            &[
+                ("best", tl!("Secure time (timestamp), else the signing time")),
+                ("signing", tl!("The time the signature was created")),
+                ("current", tl!("The current time")),
+            ],
+            Some(tl!(
+                "The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim."
+            )),
+        ),
+        "signatures.fetch_revocation" => {
+            check(ui, app, t, key, Some(tl!("Only from sites that Internet access allows. Opening or validating a document never goes online.")))
+        }
+        "signatures.revocation_max_age_hours" => setting(ui, t, key, Some(tl!("0 accepts it however old it is.")), |ui, label| {
+            let mut h = app.session.revocation_max_age_hours();
+            let r = ui
+                .add(egui::DragValue::new(&mut h).range(0..=pdfcraft_engine::signature_settings::MAX_REVOCATION_AGE_HOURS).suffix(" h"))
+                .labelled_by(label);
+            if r.changed() {
+                set(app, key, json!(h));
+            }
+        }),
+        "signatures.os_trust_signatures" => {
+            check(ui, app, t, key, Some(tl!("macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.")))
+        }
+        "signatures.os_trust_certified" => {
+            if app.session.os_trust_settings().signatures {
+                check(ui, app, t, key, None);
+            }
+        }
         "security.javascript" => {
             check(
                 ui,

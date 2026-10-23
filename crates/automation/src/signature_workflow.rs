@@ -17,8 +17,17 @@ impl Automation {
                 "A timestamp request requires allow_network: true and an explicitly configured timestamp_server.".into(),
             ));
         }
-        let server: TimestampServer = serde_json::from_value(server.clone()).map_err(|e| ToolError::InvalidArgs(format!("timestamp_server: {e}")))?;
-        HttpTimestampAuthority::new(server, self.session.trusted_certificates().to_vec(), SignatureCancellation::default())
+        // A configured server by name (sign_timestamp_servers_set), or a server given inline.
+        let server: TimestampServer = match server {
+            Value::String(name) => self
+                .session
+                .timestamp_server(name)
+                .cloned()
+                .ok_or_else(|| ToolError::InvalidArgs(format!("no timestamp server is named {name:?} (sign_timestamp_servers_get)")))?,
+            v => serde_json::from_value(v.clone()).map_err(|e| ToolError::InvalidArgs(format!("timestamp_server: {e}")))?,
+        };
+        let password = self.session.timestamp_password(&server.name).map(str::to_string);
+        HttpTimestampAuthority::with_trust(server, self.session.trust_store().clone(), password, SignatureCancellation::default())
             .map(Some)
             .map_err(ToolError::InvalidArgs)
     }

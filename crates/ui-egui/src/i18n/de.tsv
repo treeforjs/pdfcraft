@@ -2776,3 +2776,109 @@ compare-page	Moved	Verschoben
 	Numbering other files arrives on the web with folder pickers	Das Nummerieren anderer Dateien kommt im Web mit Ordnerauswahl
 	Select objects with Edit objects first	Wählen Sie zuerst mit „Objekte bearbeiten“ Objekte aus
 	Select a text box, or click into a paragraph, first	Wählen Sie zuerst ein Textfeld aus oder klicken Sie in einen Absatz
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 akzeptiert sie unabhängig vom Alter.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Eine abgebrochene Antwort wird verworfen. Eine hängende Anfrage endet an der eingestellten Frist (höchstens 30 Sekunden).
+	A certificate file is limited to 4 MiB.	Eine Zertifikatsdatei darf höchstens 4 MiB groß sein.
+	A chosen or claimed date is not cryptographic proof of time.	Ein gewähltes oder behauptetes Datum ist kein kryptografischer Zeitnachweis.
+	Account name (optional)	Kontoname (optional)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Fügen Sie ein TSA-Zertifikat erst nach unabhängiger Prüfung seiner Identität und seines Fingerabdrucks zu den vertrauenswürdigen Zertifikaten hinzu. Ohne diese Prüfung wird ein nicht vertrauenswürdiges Token gespeichert; eine vertrauenswürdige Zeit entsteht dadurch nicht.
+	Add logo…	Logo hinzufügen…
+	Add verification information	Überprüfungsinformationen hinzufügen
+	Add verification information…	Überprüfungsinformationen hinzufügen…
+	Allow a timestamp request to the selected server	Zeitstempelanfrage an den gewählten Server erlauben
+	Allow a timestamp request to this server	Zeitstempelanfrage an diesen Server erlauben
+	Also from sites that Internet access asks about	Auch von Websites, bei denen der Internetzugriff nachfragt
+	Also trust them for certified documents	Auch für zertifizierte Dokumente vertrauen
+	Appearance name	Name des Erscheinungsbilds
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Gesperrte Websites bleiben gesperrt. Nur die OCSP-Responder und CRL-Adressen der Zertifikate werden kontaktiert.
+	CRLs	CRLs
+	Cancel operation	Vorgang abbrechen
+	Certificate and revocation checks at:	Zertifikats- und Sperrprüfung zum Zeitpunkt:
+	Certified documents	Zertifizierte Dokumente
+	Change logo…	Logo ändern…
+	Choose a configured timestamp server.	Wählen Sie einen eingerichteten Zeitstempelserver.
+	Choose a server	Server wählen
+	Choose another picture…	Anderes Bild wählen…
+	Choose picture…	Bild wählen…
+	Clear drawing	Zeichnung löschen
+	Compare signed version	Signierte Version vergleichen
+	Compare signed version with current	Signierte Version mit aktueller vergleichen
+	Compare with current	Mit aktueller vergleichen
+	Couldn't compare the signed version: {e}	Die signierte Version konnte nicht verglichen werden: {e}
+	Couldn't use the picture: {e}	Das Bild konnte nicht verwendet werden: {e}
+	Current time	Aktuelle Zeit
+	Drawn signature	Gezeichnete Unterschrift
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Das Einbetten von Nachweisen stellt allein keine Konformität mit PAdES B-LT/B-LTA her. Unvollständige Abdeckung wird nach der Prüfung gemeldet.
+	Every certificate's revocation status is now in the document.	Der Sperrstatus jedes Zertifikats ist jetzt im Dokument.
+	Every change since signing is permitted by the signature.	Jede Änderung seit dem Signieren ist durch die Signatur erlaubt.
+	Every form field is locked and no later change keeps the signature valid.	Alle Formularfelder werden gesperrt, und jede spätere Änderung macht die Signatur ungültig.
+	Fetch revocation information online	Sperrinformationen online abrufen
+	Fetch revocation information online when adding verification information	Beim Hinzufügen von Überprüfungsinformationen Sperrinformationen online abrufen
+	Filling in forms, signing and commenting are permitted (approval signature).	Ausfüllen von Formularen, Signieren und Kommentieren sind erlaubt (Genehmigungssignatur).
+	HTTPS URL	HTTPS-URL
+	Import certificates…	Zertifikate importieren…
+	Issued by {issuer}, valid to {date}	Ausgestellt von {issuer}, gültig bis {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Zusätzliche lokale DER-Dateien (optional), ein Pfad pro Zeile. Zertifikaten wird nicht automatisch vertraut.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Lokale DER-Dateien, ein Pfad pro Zeile. Zertifikaten wird nicht automatisch vertraut.
+	Lock document after signing	Dokument nach dem Signieren sperren
+	Logo	Logo
+	Manage timestamp servers in Preferences → Signatures.	Zeitstempelserver verwalten Sie unter Einstellungen → Signaturen.
+	Maximum age of revocation information without an update time	Höchstalter von Sperrinformationen ohne Aktualisierungszeit
+	More changes were found than are listed.	Es wurden mehr Änderungen gefunden als aufgeführt.
+	New server	Neuer Server
+	No changes are permitted.	Es sind keine Änderungen erlaubt.
+	No saved appearances yet.	Noch keine gespeicherten Erscheinungsbilder.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Kein Server eingerichtet. PdfCraft kontaktiert nie einen Server, den Sie hier nicht hinzufügen.
+	No timestamp	Kein Zeitstempel
+	No trusted certificates yet.	Noch keine vertrauenswürdigen Zertifikate.
+	Nothing has changed since it was signed.	Seit dem Signieren hat sich nichts geändert.
+	OCSP responses	OCSP-Antworten
+	Only filling in forms and signing are permitted.	Nur das Ausfüllen von Formularen und Signieren ist erlaubt.
+	Only filling in forms, signing and commenting are permitted.	Nur das Ausfüllen von Formularen, Signieren und Kommentieren ist erlaubt.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Nur von Websites, die der Internetzugriff erlaubt. Öffnen oder Prüfen eines Dokuments geht nie online.
+	Open a signed document first	Öffnen Sie zuerst ein signiertes Dokument
+	Optional policy OID	Optionale Richtlinien-OID
+	Or UTC date (YYYYMMDDHHmmSSZ)	Oder UTC-Datum (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Seiten: {a} beim Signieren, {b} jetzt
+	Picture	Bild
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Bilder können in der Desktop-App gewählt werden; zeichnen Sie Ihre Unterschrift hier.
+	Remove logo	Logo entfernen
+	Remove picture	Bild entfernen
+	Require an explicitly trusted timestamp authority	Ausdrücklich vertrauenswürdige Zeitstempelstelle verlangen
+	Revocation information for {covered} of {needed} certificates was fetched.	Sperrinformationen für {covered} von {needed} Zertifikaten wurden abgerufen.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Speichern Sie ein Erscheinungsbild im Signierdialog: Text, ein Bild oder eine gezeichnete Unterschrift und ein Logo.
+	Save appearance	Erscheinungsbild speichern
+	Save result…	Ergebnis speichern…
+	Save server	Server speichern
+	Saved appearances	Gespeicherte Erscheinungsbilder
+	Saved the appearance {name}	Erscheinungsbild {name} gespeichert
+	Secure time (timestamp), else the signing time	Sichere Zeit (Zeitstempel), sonst die Signierzeit
+	Show on the left	Links anzeigen
+	Sign here with your mouse, pen or finger	Unterschreiben Sie hier mit Maus, Stift oder Finger
+	Signature appearances	Erscheinungsbilder der Signatur
+	Signature operation	Signaturvorgang
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Signaturen, deren Zertifikate auf eines dieser Zertifikate zurückgehen, wird vertraut. Wählen Sie, wofür jedem vertraut wird.
+	Signed documents	Signierte Dokumente
+	Signed version of {field} (revision {n})	Signierte Version von {field} (Revision {n})
+	Some changes since signing are not permitted by the signature.	Einige Änderungen seit dem Signieren sind durch die Signatur nicht erlaubt.
+	Text only	Nur Text
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Der Bereich „Signaturen“ prüft Zertifikate und Sperrungen zu diesem Zeitpunkt. Eine Signierzeit ohne vertrauenswürdigen Zeitstempel ist nur eine Angabe des Unterzeichners.
+	The current time	Die aktuelle Zeit
+	The password is kept only until PdfCraft quits, never saved.	Das Kennwort wird nur bis zum Beenden von PdfCraft behalten und nie gespeichert.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	Die Anfrage enthält einen Hashwert, nicht das PDF. Beim Öffnen dieses Dialogs wird keine Anfrage gestellt.
+	The signed version could not be read.	Die signierte Version konnte nicht gelesen werden.
+	The time the signature was created	Der Zeitpunkt, zu dem die Signatur erstellt wurde
+	Then add a document timestamp (optional):	Danach einen Dokumentzeitstempel hinzufügen (optional):
+	Timeout (seconds)	Zeitlimit (Sekunden)
+	Timestamp (optional)	Zeitstempel (optional)
+	Trust the operating system's root certificates for signatures	Den Stammzertifikaten des Betriebssystems für Signaturen vertrauen
+	Trusted certificates	Vertrauenswürdige Zertifikate
+	Trusted root	Vertrauenswürdiger Stamm
+	Trusted timestamp, else claimed signing time	Vertrauenswürdiger Zeitstempel, sonst die angegebene Signierzeit
+	Validating and saving…	Prüfen und speichern…
+	Verify signatures using	Signaturen prüfen anhand
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS-Schlüsselbund, Windows-Zertifikatspeicher oder das CA-Bündel des Systems. Standardmäßig aus.
+	{n} addresses were not contacted because of Internet access settings.	{n} Adressen wurden wegen der Einstellungen für den Internetzugriff nicht kontaktiert.
+	{n} certificates added to your trusted certificates.	{n} Zertifikate zu Ihren vertrauenswürdigen Zertifikaten hinzugefügt.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Fügt dem Dokument die Zertifikatsketten der Unterzeichner und ihren Sperrstatus hinzu, damit die Signaturen auch nach Ablauf der Zertifikate geprüft werden können.

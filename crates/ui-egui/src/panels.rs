@@ -484,6 +484,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             tools.tags.refresh(doc);
         }
         let compare = &app.compare;
+        let signed_comparison = app.signed_comparison.as_ref().filter(|c| c.doc == id);
         let compare_running = app.compare_run.as_ref().filter(|r| r.new == id).and_then(|r| r.snapshot());
         let comment_allowed = doc.allows_annotation();
         // A dialog or the palette owns the keyboard: the panel leaves Escape to it.
@@ -665,7 +666,12 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         order_action = crate::tags_ui::order_panel(ui, &t, tools, doc, page, editable).map(|a| (page, a));
                     }
                     RightPanel::Search => crate::search_ui::panel(ui, &t, view, info.pages.len()),
-                    RightPanel::Compare => compare_action = crate::compare_ui::panel(ui, &t, compare, compare_running, id),
+                    RightPanel::Compare => {
+                        if let Some(c) = signed_comparison {
+                            crate::sign_ui::signed_comparison_card(ui, &t, c);
+                        }
+                        compare_action = crate::compare_ui::panel(ui, &t, compare, compare_running, id);
+                    }
                     RightPanel::OutputPreview => {}
                     RightPanel::Attachments => {
                         if info.attachments.is_empty() {
@@ -747,6 +753,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         }
         Some(crate::sign_ui::PanelAction::ViewSigned(len)) => app.view_signed_version(len),
         Some(crate::sign_ui::PanelAction::ViewRevision { revision, end }) => app.view_revision(revision, end),
+        Some(crate::sign_ui::PanelAction::CompareSigned(field)) => app.compare_signed_with_current(&field),
+        Some(crate::sign_ui::PanelAction::AddVerification) => app.run_command("sign.ltv_enable"),
         Some(crate::sign_ui::PanelAction::Sign(field)) => {
             let page = app.views[index].current;
             app.start_signing(page, None, Some(field), None);

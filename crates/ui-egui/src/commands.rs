@@ -451,7 +451,24 @@ impl PdfCraftApp {
                 self.right = Some(RightPanel::Signatures);
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
-            "sign.timestamp_servers" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Servers),
+            "sign.timestamp_servers" | "sign.trusted_certificates" | "sign.appearances" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Signatures;
+                self.dialog = Some(Dialog::Preferences);
+            }
+            "sign.ltv_enable" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Ltv),
+            "sign.compare_signed_version" => {
+                let field = active.and_then(|i| self.session.get(self.views[i].id)).and_then(|d| {
+                    let mut sigs: Vec<_> = d.signatures.iter().filter(|s| s.signed).collect();
+                    sigs.sort_by_key(|s| s.revision);
+                    let signed: Vec<&str> = sigs.iter().map(|s| s.field.as_str()).collect();
+                    // The signature to compare: the one expanded in the Signatures panel, else the latest.
+                    signed.iter().rev().find(|f| self.sig_expanded.iter().any(|e| e == **f)).or(signed.last()).map(|f| f.to_string())
+                });
+                match field {
+                    Some(f) => self.compare_signed_with_current(&f),
+                    None => self.notify_tr("This document has no signatures."),
+                }
+            }
             "sign.timestamp" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Timestamp),
             "sign.embed_evidence" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Evidence),
             "sign.verification_options" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Verify),

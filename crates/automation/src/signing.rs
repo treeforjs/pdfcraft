@@ -314,6 +314,7 @@ impl Automation {
             contact: a.opt_str("contact")?.map(str::to_string),
             certify,
             lock: field_lock(a)?,
+            appearance: self.signing_appearance(a)?,
             ..SignOptions::default()
         };
         let authority = self.timestamp_authority(a)?;

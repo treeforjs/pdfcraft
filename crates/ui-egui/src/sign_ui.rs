@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use egui::{Align, Color32, CornerRadius, Layout, Pos2, Rect, Stroke, vec2};
 use pdfcraft_engine::sign::token::{self as tok, Identities, Login, Pin, SlotInfo, TokenError};
 use pdfcraft_engine::sign::{self, Appearance, Certificate, DigitalId, Modification, Name, PrivateKey};
+use pdfcraft_engine::signature_settings::{AppearanceGraphic, AppearanceImage, SavedAppearance};
 use pdfcraft_engine::{SignOptions, SignatureInfo, SignatureStatus};
 
 use crate::canvas::{DocView, PageXform};
@@ -145,6 +146,31 @@ pub struct SignDraft {
     pub timestamp_server: Option<usize>,
     pub timestamp_network: bool,
     pub token: TokenDraft,
+    /// Lock the document after signing: every field locked, no later changes permitted.
+    pub lock_document: bool,
+    /// What the left side of the visible signature shows.
+    pub graphic: GraphicChoice,
+    /// The drawn signature, in the signer's unit box (`0..=1000`, y down).
+    pub ink: Vec<Vec<[u16; 2]>>,
+    /// The chosen picture of a signature.
+    pub picture: Option<AppearanceImage>,
+    /// A faint logo behind the signature.
+    pub logo: Option<AppearanceImage>,
+    /// The saved appearance applied last, and the name the next one is saved under.
+    pub saved: Option<String>,
+    pub save_as: String,
+}
+
+/// The left side of a visible signature.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum GraphicChoice {
+    /// The signer's name in large type (or nothing, with Name off).
+    #[default]
+    Name,
+    /// A signature drawn with the pointer.
+    Drawn,
+    /// A picture of a signature.
+    Picture,
 }
 
 impl SignDraft {
@@ -165,7 +191,60 @@ impl SignDraft {
             timestamp_server: None,
             timestamp_network: false,
             token: TokenDraft::default(),
+            lock_document: false,
+            graphic: GraphicChoice::Name,
+            ink: Vec::new(),
+            picture: None,
+            logo: None,
+            saved: None,
+            save_as: String::new(),
         }
+    }
+
+    /// The appearance being configured, as a saved appearance named `name`.
+    pub fn look(&self, name: &str) -> SavedAppearance {
+        let a = &self.appearance;
+        let graphic = match self.graphic {
+            GraphicChoice::Name => None,
+            GraphicChoice::Drawn => (!self.ink.is_empty()).then(|| AppearanceGraphic::Drawn(self.ink.clone())),
+            GraphicChoice::Picture => self.picture.clone().map(AppearanceGraphic::Image),
+        };
+        SavedAppearance {
+            name: name.to_string(),
+            show_name: a.name,
+            date: a.date,
+            reason: a.reason,
+            location: a.location,
+            distinguished_name: a.distinguished_name,
+            labels: a.labels,
+            graphic,
+            logo: self.logo.clone(),
+        }
+    }
+
+    /// Use a saved appearance: its text choices, graphic and logo.
+    pub fn apply(&mut self, saved: &SavedAppearance) {
+        let a = &mut self.appearance;
+        a.name = saved.show_name;
+        a.date = saved.date;
+        a.reason = saved.reason;
+        a.location = saved.location;
+        a.distinguished_name = saved.distinguished_name;
+        a.labels = saved.labels;
+        match &saved.graphic {
+            None => self.graphic = GraphicChoice::Name,
+            Some(AppearanceGraphic::Drawn(s)) => {
+                self.graphic = GraphicChoice::Drawn;
+                self.ink = s.clone();
+            }
+            Some(AppearanceGraphic::Image(i)) => {
+                self.graphic = GraphicChoice::Picture;
+                self.picture = Some(i.clone());
+            }
+        }
+        self.logo = saved.logo.clone();
+        self.saved = Some(saved.name.clone());
+        self.save_as = saved.name.clone();
     }
 }
 
@@ -609,6 +688,8 @@ impl PdfCraftApp {
             })?
         };
         let some = |s: &str| (!s.trim().is_empty()).then(|| s.trim().to_string());
+        // The picture, drawn signature and logo, decoded and bounded by the engine.
+        let appearance = d.look("").appearance().map_err(|e| e.to_string())?;
         let opts = SignOptions {
             field: d.field.clone(),
             page: d.page,
@@ -616,7 +697,8 @@ impl PdfCraftApp {
             reason: some(&d.reason),
             location: some(&d.location),
             certify: d.certify,
-            appearance: d.appearance.clone(),
+            lock: d.lock_document.then(sign::FieldLock::document),
+            appearance,
             ..SignOptions::default()
         };
         let cancellation = pdfcraft_engine::signature_workflow::SignatureCancellation::default();
@@ -754,6 +836,100 @@ impl PdfCraftApp {
     /// Open saved revision `revision` (the file's first `end` bytes) as a new document.
     pub fn view_revision(&mut self, revision: usize, end: usize) {
         self.view_saved_version(end, format!("revision {revision}"));
+    }
+
+    /// Compare Signed Version to Current Version: open the version the signature in `field`
+    /// covers beside the current document, compare them side by side, and list what changed
+    /// since signing with whether the signature permits it. The current document stays active.
+    pub fn compare_signed_with_current(&mut self, field: &str) {
+        let Some((_, id)) = self.active_ids() else {
+            self.notify_tr("Open a signed document first");
+            return;
+        };
+        let result = match self.session.compare_signed_version(id, field) {
+            Ok(r) => r,
+            Err(e) => {
+                self.notify_fmt("Couldn't compare the signed version: {e}", &[("e", &e)]);
+                return;
+            }
+        };
+        // The signed version from an earlier comparison of this field is reused when still open.
+        let reuse = self
+            .signed_comparison
+            .as_ref()
+            .filter(|c| c.doc == id && c.field == field)
+            .map(|c| c.signed)
+            .filter(|s| self.views.iter().any(|v| v.id == *s));
+        let signed = match reuse {
+            Some(s) => s,
+            None => match self.session.open_signed_version(id, field) {
+                Ok(s) => {
+                    let Some(doc) = self.session.get(s) else { return };
+                    self.views.push(DocView::new(s, &doc.info, self.view_defaults));
+                    s
+                }
+                Err(e) => {
+                    self.notify_fmt("Couldn't open the signed version: {e}", &[("e", &e)]);
+                    return;
+                }
+            },
+        };
+        if let Some(i) = self.views.iter().position(|v| v.id == id) {
+            self.active = Some(i);
+        }
+        self.signed_comparison = Some(SignedComparison { doc: id, signed, field: field.to_string(), result });
+        self.compare_old = Some(signed);
+        self.side_by_side_after_compare = true;
+        self.run_compare();
+    }
+
+    /// Save the Sign As dialog's appearance under `name` (replacing one of that name).
+    pub fn save_sign_appearance(&mut self, name: &str) -> Result<(), String> {
+        let d = self.sign_draft.as_ref().ok_or("nothing to sign")?;
+        let look = d.look(name);
+        // The engine checks the name, sizes and limits.
+        look.appearance().map_err(|e| e.to_string())?;
+        self.session.save_signature_appearance(look).map_err(|e| e.to_string())?;
+        let saved = self.session.signature_appearance(name.trim()).map(|a| a.name.clone());
+        if let Some(d) = self.sign_draft.as_mut() {
+            d.saved = saved;
+        }
+        self.notify_fmt("Saved the appearance {name}", &[("name", name.trim())]);
+        Ok(())
+    }
+
+    /// Use the picture (or, with `logo`, the logo) in the file at `path` in the Sign As dialog.
+    /// A signature picture loses its white background, as in Fill & Sign.
+    pub fn set_sign_picture(&mut self, logo: bool, path: &std::path::Path) -> Result<(), String> {
+        let image = std::fs::File::open(path)
+            .map_err(pdfcraft_engine::signature_image::SignatureImageError::from)
+            .and_then(pdfcraft_engine::SignatureImage::read)
+            .map_err(|e| e.to_string())?;
+        let image = if logo { image } else { image.remove_white_background(245, 35).map_err(|e| e.to_string())? };
+        let image = AppearanceImage(image);
+        // Refuse here what signing would refuse.
+        image.graphic().map_err(|e| e.to_string())?;
+        let d = self.sign_draft.as_mut().ok_or("nothing to sign")?;
+        if logo {
+            d.logo = Some(image);
+        } else {
+            d.picture = Some(image);
+            d.graphic = GraphicChoice::Picture;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn pick_sign_picture(&mut self, logo: bool) {
+        let dialog = rfd::AsyncFileDialog::new().add_filter(tl!("Image"), &["png", "jpg", "jpeg"]);
+        let _ = self.ask_one(crate::pickers::Ask::File(dialog), None, move |app, path| {
+            if app.sign_draft.is_none() {
+                return;
+            }
+            if let Err(e) = app.set_sign_picture(logo, &path) {
+                app.notify_fmt("Couldn't use the picture: {e}", &[("e", &e)]);
+            }
+        });
     }
 
     /// Open the active document's first `len` bytes (a saved revision) as "<name> (<what>)".
@@ -1228,15 +1404,97 @@ fn token_step(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     close
 }
 
-/// The appearance preview: Acrobat's standard layout (name left, details right).
+/// A picture's texture, made once per picture (kept in egui's memory under `key`).
+fn picture_texture(ctx: &egui::Context, key: &str, img: &AppearanceImage) -> Option<egui::TextureHandle> {
+    let id = egui::Id::new(("sign-appearance-texture", key));
+    let tag = (img.0.bytes().as_ptr() as usize, img.0.bytes().len());
+    if let Some((t, tex)) = ctx.data(|d| d.get_temp::<((usize, usize), egui::TextureHandle)>(id))
+        && t == tag
+    {
+        return Some(tex);
+    }
+    // Bounded by the signer's size limit (the same scaling signing applies).
+    let g = img.graphic().ok()?;
+    let color = egui::ColorImage::from_rgba_unmultiplied([g.width() as usize, g.height() as usize], g.rgba());
+    let tex = ctx.load_texture(format!("sign-appearance-{key}"), color, egui::TextureOptions::LINEAR);
+    ctx.data_mut(|d| d.insert_temp(id, (tag, tex.clone())));
+    Some(tex)
+}
+
+/// `w`×`h` fitted into `area`, centred, keeping its proportions.
+fn fit_rect(area: Rect, w: f32, h: f32) -> Option<Rect> {
+    if w <= 0.0 || h <= 0.0 || area.width() <= 1.0 || area.height() <= 1.0 {
+        return None;
+    }
+    let k = (area.width() / w).min(area.height() / h);
+    Some(Rect::from_center_size(area.center(), vec2(w * k, h * k)))
+}
+
+/// Ink strokes (signer units) fitted into `area`, as the signer draws them.
+fn paint_ink(painter: &egui::Painter, area: Rect, ink: &[Vec<[u16; 2]>], color: Color32) {
+    let all = || ink.iter().flatten();
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in all() {
+        let (x, y) = (f32::from(p[0]), f32::from(p[1]));
+        x0 = x0.min(x);
+        y0 = y0.min(y);
+        x1 = x1.max(x);
+        y1 = y1.max(y);
+    }
+    let Some(fit) = fit_rect(area, (x1 - x0).max(1.0), (y1 - y0).max(1.0)) else { return };
+    let k = fit.width() / (x1 - x0).max(1.0);
+    let width = (fit.height() * 0.04).clamp(1.0, 3.0);
+    for s in ink {
+        let pts: Vec<Pos2> = s.iter().map(|p| fit.min + vec2((f32::from(p[0]) - x0) * k, (f32::from(p[1]) - y0) * k)).collect();
+        match pts.as_slice() {
+            [] => {}
+            [one] => {
+                painter.circle_filled(*one, width / 2.0, color);
+            }
+            _ => {
+                painter.add(egui::Shape::line(pts, Stroke::new(width, color)));
+            }
+        }
+    }
+}
+
+/// The ink colour of a drawn signature (the signer's: a dark blue).
+const INK: Color32 = Color32::from_rgb(0x14, 0x1A, 0x52);
+
+/// The appearance preview: Acrobat's standard layout (name or graphic left, details right),
+/// with the logo faint behind.
 fn preview(ui: &mut egui::Ui, t: &Tokens, name: &str, d: &SignDraft) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 96.0), egui::Sense::hover());
     let bg = if t.dark() { Color32::from_gray(0xF4) } else { Color32::WHITE };
     ui.painter().rect(rect, CornerRadius::same(4), bg, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
     let inner = rect.shrink(10.0);
     let a = &d.appearance;
-    if a.name {
-        let half = Rect::from_min_size(inner.min, vec2(inner.width() * 0.5 - 6.0, inner.height()));
+    if let Some(logo) = &d.logo
+        && let Some(tex) = picture_texture(ui.ctx(), "logo", logo)
+        && let Some(r) = fit_rect(inner, tex.size_vec2().x, tex.size_vec2().y)
+    {
+        let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+        ui.painter().image(tex.id(), r, uv, Color32::from_white_alpha(64));
+    }
+    let look = d.look("");
+    let half = Rect::from_min_size(inner.min, vec2(inner.width() * 0.5 - 6.0, inner.height()));
+    let has_graphic = match &look.graphic {
+        Some(AppearanceGraphic::Drawn(ink)) => {
+            paint_ink(ui.painter(), half, ink, INK);
+            true
+        }
+        Some(AppearanceGraphic::Image(img)) => {
+            if let Some(tex) = picture_texture(ui.ctx(), "graphic", img)
+                && let Some(r) = fit_rect(half, tex.size_vec2().x, tex.size_vec2().y)
+            {
+                let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+                ui.painter().image(tex.id(), r, uv, Color32::WHITE);
+            }
+            true
+        }
+        None => false,
+    };
+    if a.name && !has_graphic {
         let galley = ui.painter().layout(name.to_string(), theme::regular(22.0), Color32::BLACK, half.width());
         ui.painter().galley(half.left_center() - vec2(0.0, galley.size().y / 2.0), galley, Color32::BLACK);
     }
@@ -1253,13 +1511,90 @@ fn preview(ui: &mut egui::Ui, t: &Tokens, name: &str, d: &SignDraft) {
     if a.date {
         lines.push(format!("{}{}", if a.labels { "Date: " } else { "" }, "(the signing time)"));
     }
-    let x = if a.name { inner.center().x + 6.0 } else { inner.left() };
+    let x = if a.name || has_graphic { inner.center().x + 6.0 } else { inner.left() };
     let galley = ui.painter().layout(lines.join("\n"), theme::regular(11.0), Color32::from_gray(0x20), inner.right() - x);
     ui.painter().galley(egui::pos2(x, inner.center().y - galley.size().y / 2.0), galley, Color32::BLACK);
 }
 
+/// Strokes and points a drawing pad keeps (the signer's limits).
+const PAD_MAX_STROKES: usize = sign::appearance::MAX_INK_STROKES;
+const PAD_MAX_POINTS: usize = sign::appearance::MAX_INK_POINTS;
+
+/// Draw a signature with the pointer: strokes in signer units (the pad's width is 1000).
+fn drawing_pad(ui: &mut egui::Ui, t: &Tokens, ink: &mut Vec<Vec<[u16; 2]>>) {
+    let w = ui.available_width().min(420.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, w / 3.0), egui::Sense::drag());
+    let resp = resp.on_hover_cursor(egui::CursorIcon::Crosshair);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, tl!("Sign here with your mouse, pen or finger")));
+    let bg = if t.dark() { Color32::from_gray(0xF4) } else { Color32::WHITE };
+    ui.painter().rect(rect, CornerRadius::same(4), bg, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+    // The baseline the signature sits on.
+    let base = rect.bottom() - rect.height() * 0.25;
+    ui.painter()
+        .line_segment([egui::pos2(rect.left() + 12.0, base), egui::pos2(rect.right() - 12.0, base)], Stroke::new(1.0, Color32::from_gray(0xC8)));
+    let points: usize = ink.iter().map(Vec::len).sum();
+    if let Some(p) = resp.interact_pointer_pos()
+        && rect.contains(p)
+        && points < PAD_MAX_POINTS
+    {
+        let k = 1000.0 / rect.width().max(1.0);
+        let unit = |v: f32| (v * k).round().clamp(0.0, 1000.0) as u16;
+        let pt = [unit(p.x - rect.left()), unit(p.y - rect.top())];
+        // Whether this drag owns the last stroke (none starts past the stroke limit).
+        let owner = resp.id.with("drawing");
+        if resp.drag_started() {
+            let started = ink.len() < PAD_MAX_STROKES;
+            if started {
+                ink.push(vec![pt]);
+            }
+            ui.data_mut(|d| d.insert_temp(owner, started));
+        } else if ui.data(|d| d.get_temp::<bool>(owner)).unwrap_or(false)
+            && let Some(last) = ink.last_mut()
+            && last.last().is_none_or(|q| q[0].abs_diff(pt[0]) + q[1].abs_diff(pt[1]) >= 3)
+        {
+            last.push(pt);
+        }
+    }
+    let k = rect.width() / 1000.0;
+    let width = 2.0;
+    for s in ink.iter() {
+        let pts: Vec<Pos2> = s.iter().map(|p| rect.min + vec2(f32::from(p[0]) * k, f32::from(p[1]) * k)).collect();
+        match pts.as_slice() {
+            [] => {}
+            [one] => {
+                ui.painter().circle_filled(*one, width / 2.0, INK);
+            }
+            _ => {
+                ui.painter().add(egui::Shape::line(pts, Stroke::new(width, INK)));
+            }
+        }
+    }
+    if ink.is_empty() {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            tl!("Sign here with your mouse, pen or finger"),
+            theme::regular(12.0),
+            t.text_muted,
+        );
+    }
+}
+
+/// What the appearance part of the Sign As dialog asks of the app.
+enum LookAction {
+    Apply(String),
+    Save(String),
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    Pick {
+        logo: bool,
+    },
+}
+
 fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     let ids = app.digital_ids.clone();
+    let servers = app.session.timestamp_servers().to_vec();
+    let saved: Vec<String> = app.session.signature_appearances().iter().map(|a| a.name.clone()).collect();
+    let mut look_action = None;
     let Some(d) = app.sign_draft.as_mut() else { return true };
     let Some(entry) = d.selected.and_then(|i| ids.get(i)).cloned() else {
         d.step = SignStep::Choose;
@@ -1286,6 +1621,67 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
             ui.checkbox(&mut a.location, tl!("Location"));
             ui.checkbox(&mut a.distinguished_name, tl!("Distinguished name"));
             ui.checkbox(&mut a.labels, tl!("Labels"));
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new(tl!("Show on the left")).color(t.text_muted));
+            for (choice, label) in
+                [(GraphicChoice::Name, tl!("Name")), (GraphicChoice::Drawn, tl!("Drawn signature")), (GraphicChoice::Picture, tl!("Picture"))]
+            {
+                if widgets::pill_button(ui, label, d.graphic == choice).clicked() {
+                    d.graphic = choice;
+                }
+            }
+        });
+        match d.graphic {
+            GraphicChoice::Name => {}
+            GraphicChoice::Drawn => {
+                drawing_pad(ui, t, &mut d.ink);
+                if !d.ink.is_empty() && ui.button(tl!("Clear drawing")).clicked() {
+                    d.ink.clear();
+                }
+            }
+            GraphicChoice::Picture => {
+                ui.horizontal_wrapped(|ui| {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button(if d.picture.is_some() { tl!("Choose another picture…") } else { tl!("Choose picture…") }).clicked() {
+                        look_action = Some(LookAction::Pick { logo: false });
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    ui.label(
+                        egui::RichText::new(tl!("Pictures can be chosen in the desktop app; draw your signature here instead."))
+                            .small()
+                            .color(t.text_muted),
+                    );
+                    if d.picture.is_some() && ui.button(tl!("Remove picture")).clicked() {
+                        d.picture = None;
+                    }
+                });
+            }
+        }
+        ui.horizontal_wrapped(|ui| {
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui.button(if d.logo.is_some() { tl!("Change logo…") } else { tl!("Add logo…") }).clicked() {
+                look_action = Some(LookAction::Pick { logo: true });
+            }
+            if d.logo.is_some() && ui.button(tl!("Remove logo")).clicked() {
+                d.logo = None;
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if !saved.is_empty() {
+                let shown = d.saved.clone().unwrap_or_else(|| tl!("Saved appearances").to_string());
+                egui::ComboBox::from_id_salt("sign-saved-appearance").selected_text(shown).width(180.0).show_ui(ui, |ui| {
+                    for n in &saved {
+                        if ui.selectable_label(d.saved.as_deref() == Some(n.as_str()), n).clicked() {
+                            look_action = Some(LookAction::Apply(n.clone()));
+                        }
+                    }
+                });
+            }
+            ui.add(egui::TextEdit::singleline(&mut d.save_as).hint_text(tl!("Appearance name")).desired_width(150.0));
+            if ui.add_enabled(!d.save_as.trim().is_empty(), egui::Button::new(tl!("Save appearance"))).clicked() {
+                look_action = Some(LookAction::Save(d.save_as.trim().to_string()));
+            }
         });
         ui.add_space(6.0);
     } else {
@@ -1336,13 +1732,17 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         }
         ui.end_row();
     });
-    ui.add_space(6.0);
-    ui.label("Timestamp (optional)");
-    crate::timestamp_ui::server_choice(ui, &app.timestamp_servers, &mut d.timestamp_server, true);
-    if d.timestamp_server.is_some() {
-        ui.checkbox(&mut d.timestamp_network, "Allow a timestamp request to this server");
+    ui.checkbox(&mut d.lock_document, tl!("Lock document after signing"));
+    if d.lock_document {
+        ui.label(egui::RichText::new(tl!("Every form field is locked and no later change keeps the signature valid.")).small().color(t.text_muted));
     }
-    ui.label("Configure servers in Use a certificate → Timestamp servers.");
+    ui.add_space(6.0);
+    ui.label(tl!("Timestamp (optional)"));
+    crate::timestamp_ui::server_choice(ui, &servers, &mut d.timestamp_server, true);
+    if d.timestamp_server.is_some() {
+        ui.checkbox(&mut d.timestamp_network, tl!("Allow a timestamp request to this server"));
+    }
+    ui.label(egui::RichText::new(tl!("Manage timestamp servers in Preferences → Signatures.")).small().color(t.text_muted));
     error(ui, &d.error);
     ui.horizontal(|ui| {
         if widgets::pill_button(ui, tl!("Back"), false).clicked() {
@@ -1358,6 +1758,27 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
             }
         });
     });
+    match look_action {
+        Some(LookAction::Apply(name)) => {
+            if let Some(a) = app.session.signature_appearance(&name).cloned()
+                && let Some(d) = app.sign_draft.as_mut()
+            {
+                d.apply(&a);
+            }
+        }
+        Some(LookAction::Save(name)) => {
+            if let Err(e) = app.save_sign_appearance(&name)
+                && let Some(d) = app.sign_draft.as_mut()
+            {
+                d.error = Some(e);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Some(LookAction::Pick { logo }) => app.pick_sign_picture(logo),
+        #[cfg(target_arch = "wasm32")]
+        Some(LookAction::Pick { .. }) => {}
+        None => {}
+    }
     if go {
         match app.finish_signing() {
             Ok(()) => {
@@ -1430,6 +1851,79 @@ pub enum PanelAction {
         revision: usize,
         end: usize,
     },
+    /// Compare the version the signature in the field covers with the current document.
+    CompareSigned(String),
+    /// Add verification information (LTV) for every signature.
+    AddVerification,
+}
+
+/// Compare Signed Version to Current Version: what changed after the signature in `field`,
+/// shown above the side-by-side comparison of `signed` (the signed version) and `doc`.
+#[derive(Clone, Debug)]
+pub struct SignedComparison {
+    pub doc: pdfcraft_engine::DocId,
+    pub signed: pdfcraft_engine::DocId,
+    pub field: String,
+    pub result: sign::SignedVersionComparison,
+}
+
+/// The card above the Compare panel for a signed version: the verdict and each kind of change.
+pub(crate) fn signed_comparison_card(ui: &mut egui::Ui, t: &Tokens, c: &SignedComparison) {
+    let r = &c.result;
+    let (icon, color, verdict) = if r.unreadable {
+        ("circle-x", Color32::from_rgb(0xD7, 0x37, 0x3F), tl!("The signed version could not be read."))
+    } else if !r.modified() {
+        ("circle-check", Color32::from_rgb(0x2D, 0x9D, 0x78), tl!("Nothing has changed since it was signed."))
+    } else if r.permitted() {
+        ("circle-check", Color32::from_rgb(0x2D, 0x9D, 0x78), tl!("Every change since signing is permitted by the signature."))
+    } else {
+        ("triangle-alert", Color32::from_rgb(0xE6, 0x86, 0x19), tl!("Some changes since signing are not permitted by the signature."))
+    };
+    egui::Frame::NONE
+        .fill(t.card)
+        .stroke(Stroke::new(1.0, t.border))
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.add(icons::image(icon, 16.0, color));
+                ui.label(
+                    egui::RichText::new(crate::i18n::fmt(
+                        tl!("Signed version of {field} (revision {n})"),
+                        &[("field", &c.field), ("n", &r.revision.to_string())],
+                    ))
+                    .font(theme::semibold(12.5)),
+                );
+            });
+            ui.add(egui::Label::new(egui::RichText::new(verdict).font(theme::regular(11.5))).wrap());
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(tl!(sign::signed_version::permissions_label(r.permissions))).font(theme::regular(11.5)).color(t.text_muted),
+                )
+                .wrap(),
+            );
+            if r.signed_pages != r.current_pages {
+                ui.label(
+                    egui::RichText::new(crate::i18n::fmt(
+                        tl!("Pages: {a} when signed, {b} now"),
+                        &[("a", &r.signed_pages.to_string()), ("b", &r.current_pages.to_string())],
+                    ))
+                    .font(theme::regular(11.5)),
+                );
+            }
+            for (kind, permitted) in r.kinds() {
+                ui.horizontal(|ui| {
+                    let (mark, mc) = if permitted { ("check", t.text_muted) } else { ("x", Color32::from_rgb(0xD7, 0x37, 0x3F)) };
+                    ui.add(icons::image(mark, 12.0, mc));
+                    ui.label(egui::RichText::new(change_label(&kind)).font(theme::regular(11.5)));
+                });
+            }
+            if r.truncated {
+                ui.label(egui::RichText::new(tl!("More changes were found than are listed.")).small().color(t.text_muted));
+            }
+        });
+    ui.add_space(6.0);
 }
 
 /// How the Signatures panel names a kind of change (the kinds [`Modification`] lists).
@@ -1519,6 +2013,9 @@ pub(crate) fn panel(
     ui.horizontal(|ui| {
         if widgets::pill_button(ui, tl!("Validate all"), false).clicked() {
             action = Some(PanelAction::Validate);
+        }
+        if sigs.iter().any(|s| s.signed) && widgets::pill_button(ui, tl!("Add verification information…"), false).clicked() {
+            action = Some(PanelAction::AddVerification);
         }
     });
     ui.add_space(6.0);
@@ -1651,6 +2148,9 @@ pub(crate) fn panel(
                 }
                 if ui.button(tl!("View signed version")).clicked() {
                     action = Some(PanelAction::ViewSigned(s.signed_len));
+                }
+                if ui.button(tl!("Compare with current")).clicked() {
+                    action = Some(PanelAction::CompareSigned(s.field.clone()));
                 }
                 if let Some(chain) = viewer_chain(s)
                     && ui.button(tl!("Show certificate…")).clicked()

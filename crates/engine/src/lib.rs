@@ -42,7 +42,9 @@ pub mod prefs;
 pub mod reader_selection;
 pub mod reading_order;
 pub mod recovery;
+pub mod revocation_fetch;
 pub mod signature_image;
+pub mod signature_settings;
 pub mod signature_workflow;
 pub mod submit;
 pub mod summary;
@@ -3174,6 +3176,8 @@ pub struct Session {
     ocr_engines: ocr::Engines,
     /// Preferences held by the session (autosave, identity, accessibility…; see [`prefs`]).
     prefs: prefs::Preferences,
+    /// Preferences → Signatures: servers, appearances, verification time (see [`signature_settings`]).
+    signature_settings: signature_settings::SignatureSettings,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
@@ -3276,7 +3280,7 @@ fn revisions_of(cos: &pdfcraft_cos::Document, bytes: &[u8], signatures: &[Signat
 
 /// Validate the signature fields of `cos` (written as `bytes`).
 fn signatures_of(cos: &pdfcraft_cos::Document, bytes: &[u8], trust: &TrustStore, cache: &pdfcraft_sign::DigestCache) -> Arc<Vec<SignatureInfo>> {
-    Arc::new(pdfcraft_sign::pdf::list_cached(cos, bytes, trust, cache))
+    Arc::new(pdfcraft_sign::pdf::list_cached_with_time(cos, bytes, trust, cache, trust.verification))
 }
 
 impl Session {
@@ -3605,6 +3609,10 @@ impl Session {
         let added = editor.as_ref().map(|e| pdfcraft_edit::list_added(&e.cos)).unwrap_or_default();
         let links = editor.as_ref().map(|e| pdfcraft_annot::links::list(&e.cos)).unwrap_or_default();
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
+        // "Current time" validation reads the clock when a document opens.
+        if self.signature_settings.verify_at == signature_settings::VerifyAt::Current {
+            Arc::make_mut(&mut self.trust).verification = self.verification_time();
+        }
         let (signatures, revisions) = editor
             .as_ref()
             .map(|e| {
@@ -4673,7 +4681,13 @@ impl Session {
         self.replace_trust(trust);
     }
 
-    fn replace_trust(&mut self, trust: TrustStore) {
+    fn replace_trust(&mut self, mut trust: TrustStore) {
+        // Preferences → Signatures: the verification time and the revocation freshness policy.
+        trust.verification = self.verification_time();
+        trust.revocation_max_age = match self.signature_settings.revocation_max_age_hours {
+            0 => None,
+            h => Some(u64::from(h).saturating_mul(3600)),
+        };
         self.trust = Arc::new(trust);
         for doc in &mut self.docs {
             doc.trust = self.trust.clone();

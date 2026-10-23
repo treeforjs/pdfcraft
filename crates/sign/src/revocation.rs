@@ -1,6 +1,6 @@
 //! Revocation evidence (RFC 5280 CRLs, RFC 6960 OCSP): parsing, signature verification and
-//! status lookup for evidence embedded in a DSS or supplied by the caller. Never fetches:
-//! the transport and the choice of evidence stay with the caller.
+//! status lookup for evidence embedded in a DSS or supplied by the caller, and the OCSP request
+//! a caller sends. Never fetches: the transport and the choice of evidence stay with the caller.
 
 use crate::der::{Tlv, tag};
 use crate::keys::{self, DigestAlg, PublicKey};
@@ -38,8 +38,33 @@ fn strip(b: &[u8]) -> &[u8] {
     }
 }
 
-fn valid_in_window(this: Time, next: Option<Time>, at: Time) -> bool {
-    at >= this && next.is_none_or(|n| at <= n)
+/// Whether evidence issued at `this` (valid until `next`) speaks for `cert` at `at`.
+///
+/// Inside its window it does. Evidence issued after `at` does too, while `cert` was still
+/// within its validity period when the evidence was issued: a revocation is permanent, so
+/// "not revoked" later means "not revoked" at `at` (this is how evidence fetched after signing
+/// supports long-term validation), and a later revocation is reported as a revocation.
+/// Without `nextUpdate`, `max_age` (seconds after issuance) bounds the window; `None` leaves
+/// it open, as RFC 5280 and RFC 6960 leave freshness to local policy.
+fn valid_in_window(cert: &Certificate, this: Time, next: Option<Time>, at: Time, max_age: Option<u64>) -> bool {
+    if at < this {
+        return this <= cert.not_after;
+    }
+    let upper = next.or_else(|| max_age.map(|age| Time::from_unix(this.unix().saturating_add(i64::try_from(age).unwrap_or(i64::MAX)))));
+    upper.is_none_or(|n| at <= n)
+}
+
+/// A request for `cert`'s status from its issuer's OCSP responder (RFC 6960 §4.1.1), with a
+/// SHA-1 CertID as the lightweight profile (RFC 5019) that public responders serve expects.
+/// No nonce: such responders answer from a cache, and the response is verified on its own.
+pub fn ocsp_request(cert: &Certificate, issuer: &Certificate) -> Vec<u8> {
+    use crate::der;
+    let id = CertId::build(cert, issuer, DigestAlg::Sha1);
+    let cert_id =
+        der::seq(&[&id.hash_alg.algorithm(), &der::octets(&id.issuer_name_hash), &der::octets(&id.issuer_key_hash), &der::uint(&id.serial)]);
+    let request = der::seq(&[&cert_id]);
+    let tbs = der::seq(&[&der::seq(&[&request])]);
+    der::seq(&[&tbs])
 }
 
 /// Verify `signature` over the raw `signed` bytes with `key`, where the signature's algorithm
@@ -106,13 +131,18 @@ impl CertificateList {
     /// Check `cert` against this CRL at `at`. The CRL must be issued by `cert`'s issuer, its
     /// signature must verify with the issuer's key, and `at` must fall inside its window.
     pub fn check(&self, cert: &Certificate, issuer: &Certificate, at: Time) -> RevocationStatus {
+        self.check_with(cert, issuer, at, None)
+    }
+
+    /// [`CertificateList::check`] with a maximum age for a CRL without `nextUpdate`.
+    pub fn check_with(&self, cert: &Certificate, issuer: &Certificate, at: Time, max_age: Option<u64>) -> RevocationStatus {
         if self.issuer_raw != issuer.subject.raw || issuer.subject.raw != cert.issuer.raw {
             return RevocationStatus::Unknown;
         }
         if !verify_signature(&self.tbs, &self.sig_alg, &self.signature, &issuer.public_key) {
             return RevocationStatus::Unknown;
         }
-        if !valid_in_window(self.this_update, self.next_update, at) {
+        if !valid_in_window(cert, self.this_update, self.next_update, at, max_age) {
             return RevocationStatus::Unknown;
         }
         match self.revoked.iter().find(|(serial, _)| strip(serial) == strip(&cert.serial)) {
@@ -262,10 +292,15 @@ impl OcspResponse {
     /// Check `cert` (issued by `issuer`) at `at`. The responder must be the issuer itself, or
     /// a delegated responder with the OCSP-signing EKU whose embedded certificate is issued by
     /// the issuer and valid when the response was produced; the response signature and CertID
-    /// must match, and `at` must fall inside the response window. A response without
-    /// `nextUpdate` has no upper bound here (RFC 6960 §4.2.2.1 leaves freshness to local
-    /// policy, and no maximum-age policy is configured yet).
+    /// must match, and `at` must fall inside the response window (or precede it, see
+    /// `valid_in_window`). A response without `nextUpdate` has no upper bound here; see
+    /// [`OcspResponse::check_with`] for a maximum age.
     pub fn check(&self, cert: &Certificate, issuer: &Certificate, at: Time) -> RevocationStatus {
+        self.check_with(cert, issuer, at, None)
+    }
+
+    /// [`OcspResponse::check`] with a maximum age for a response without `nextUpdate`.
+    pub fn check_with(&self, cert: &Certificate, issuer: &Certificate, at: Time, max_age: Option<u64>) -> RevocationStatus {
         // Who signed the response? The issuer identified by responderID, or a delegated,
         // embedded responder identified the same way.
         let responder: Option<&Certificate> = match &self.responder_id {
@@ -309,7 +344,7 @@ impl OcspResponse {
             name_hash == r.cert_id.issuer_name_hash && key_hash == r.cert_id.issuer_key_hash && strip(&r.cert_id.serial) == strip(&cert.serial)
         });
         let Some(single) = single else { return RevocationStatus::Unknown };
-        if !valid_in_window(single.this_update, single.next_update, at) {
+        if !valid_in_window(cert, single.this_update, single.next_update, at, max_age) {
             return RevocationStatus::Unknown;
         }
         match single.status {

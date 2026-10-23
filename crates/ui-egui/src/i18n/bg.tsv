@@ -2739,3 +2739,109 @@ compare-page	Moved	Преместена
 	Select objects with Edit objects first	Първо изберете обекти с „Редактиране на обекти“
 	Select a text box, or click into a paragraph, first	Първо изберете текстово поле или щракнете в абзац
 	That didn't work: an internal error stopped it ({m}).	Това не стана: спря го вътрешна грешка ({m}).
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 го приема независимо от възрастта.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Отменен отговор се изхвърля. Блокирала заявка спира при зададения срок (най-много 30 секунди).
+	A certificate file is limited to 4 MiB.	Файлът със сертификат е ограничен до 4 MiB.
+	A chosen or claimed date is not cryptographic proof of time.	Избрана или заявена дата не е криптографско доказателство за време.
+	Account name (optional)	Име на акаунт (по избор)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Добавяйте сертификат на TSA към доверените сертификати само след независима проверка на самоличността и отпечатъка му. Изключването на проверката записва недоверен маркер; то не установява доверено време.
+	Add logo…	Добавяне на лого…
+	Add verification information	Добавяне на информация за проверка
+	Add verification information…	Добавяне на информация за проверка…
+	Allow a timestamp request to the selected server	Разрешаване на заявка за времеви печат до избрания сървър
+	Allow a timestamp request to this server	Разрешаване на заявка за времеви печат до този сървър
+	Also from sites that Internet access asks about	Също и от сайтове, за които достъпът до интернет пита
+	Also trust them for certified documents	Доверяване и за сертифицирани документи
+	Appearance name	Име на облика
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Блокираните сайтове остават блокирани. Свързва се само с OCSP услугите и CRL адресите на сертификатите.
+	CRLs	CRL списъци
+	Cancel operation	Отказ на операцията
+	Certificate and revocation checks at:	Проверка на сертификати и отмяна към:
+	Certified documents	Сертифицирани документи
+	Change logo…	Смяна на логото…
+	Choose a configured timestamp server.	Изберете настроен сървър за времеви печат.
+	Choose a server	Изберете сървър
+	Choose another picture…	Избор на друго изображение…
+	Choose picture…	Избор на изображение…
+	Clear drawing	Изчистване на рисунката
+	Compare signed version	Сравняване на подписаната версия
+	Compare signed version with current	Сравняване на подписаната версия с текущата
+	Compare with current	Сравняване с текущата
+	Couldn't compare the signed version: {e}	Подписаната версия не може да бъде сравнена: {e}
+	Couldn't use the picture: {e}	Изображението не може да се използва: {e}
+	Current time	Текущо време
+	Drawn signature	Нарисуван подпис
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Вграждането на доказателства само по себе си не осигурява съответствие с PAdES B-LT/B-LTA. Непълното покритие се съобщава след проверката.
+	Every certificate's revocation status is now in the document.	Статусът на отмяна на всеки сертификат вече е в документа.
+	Every change since signing is permitted by the signature.	Всяка промяна след подписването е разрешена от подписа.
+	Every form field is locked and no later change keeps the signature valid.	Всички полета на формуляра се заключват и никоя по-късна промяна не запазва подписа валиден.
+	Fetch revocation information online	Извличане на информация за отмяна онлайн
+	Fetch revocation information online when adding verification information	Извличане на информация за отмяна онлайн при добавяне на информация за проверка
+	Filling in forms, signing and commenting are permitted (approval signature).	Разрешени са попълване на формуляри, подписване и коментиране (одобряващ подпис).
+	HTTPS URL	HTTPS адрес
+	Import certificates…	Импортиране на сертификати…
+	Issued by {issuer}, valid to {date}	Издаден от {issuer}, валиден до {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Локални DER файлове за добавяне (по избор), по един път на ред. Сертификатите не стават доверени автоматично.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Локални DER файлове, по един път на ред. Сертификатите не стават доверени автоматично.
+	Lock document after signing	Заключване на документа след подписване
+	Logo	Лого
+	Manage timestamp servers in Preferences → Signatures.	Управлявайте сървърите за времеви печат в Предпочитания → Подписи.
+	Maximum age of revocation information without an update time	Максимална възраст на информация за отмяна без време за обновяване
+	More changes were found than are listed.	Открити са повече промени, отколкото са изброени.
+	New server	Нов сървър
+	No changes are permitted.	Не се разрешават промени.
+	No saved appearances yet.	Все още няма запазени облици.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Няма настроен сървър. PdfCraft никога не се свързва със сървър, освен ако не го добавите тук.
+	No timestamp	Без времеви печат
+	No trusted certificates yet.	Все още няма доверени сертификати.
+	Nothing has changed since it was signed.	Нищо не е променено след подписването.
+	OCSP responses	OCSP отговори
+	Only filling in forms and signing are permitted.	Разрешени са само попълване на формуляри и подписване.
+	Only filling in forms, signing and commenting are permitted.	Разрешени са само попълване на формуляри, подписване и коментиране.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Само от сайтове, разрешени от достъпа до интернет. Отварянето или проверката на документ никога не излиза онлайн.
+	Open a signed document first	Първо отворете подписан документ
+	Optional policy OID	OID на политика (по избор)
+	Or UTC date (YYYYMMDDHHmmSSZ)	Или UTC дата (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Страници: {a} при подписване, {b} сега
+	Picture	Изображение
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Изображения могат да се избират в настолното приложение; тук нарисувайте подписа си.
+	Remove logo	Премахване на логото
+	Remove picture	Премахване на изображението
+	Require an explicitly trusted timestamp authority	Изискване на изрично доверен орган за времеви печат
+	Revocation information for {covered} of {needed} certificates was fetched.	Извлечена е информация за отмяна за {covered} от {needed} сертификата.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Запазете облик от диалога за подписване: текста му, изображение или нарисуван подпис и лого.
+	Save appearance	Запазване на облика
+	Save result…	Запазване на резултата…
+	Save server	Запазване на сървъра
+	Saved appearances	Запазени облици
+	Saved the appearance {name}	Обликът {name} е запазен
+	Secure time (timestamp), else the signing time	Сигурно време (времеви печат), иначе времето на подписване
+	Show on the left	Показване вляво
+	Sign here with your mouse, pen or finger	Подпишете тук с мишка, писалка или пръст
+	Signature appearances	Облици на подписа
+	Signature operation	Операция с подпис
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Подписи, чиито сертификати водят до някой от тези, са доверени. Изберете за какво е доверен всеки.
+	Signed documents	Подписани документи
+	Signed version of {field} (revision {n})	Подписана версия на {field} (редакция {n})
+	Some changes since signing are not permitted by the signature.	Някои промени след подписването не са разрешени от подписа.
+	Text only	Само текст
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Панелът „Подписи“ проверява сертификатите и отмяната към този момент. Време на подписване без доверен времеви печат е само твърдение на подписващия.
+	The current time	Текущото време
+	The password is kept only until PdfCraft quits, never saved.	Паролата се пази само докато PdfCraft работи и никога не се запазва.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	Заявката съдържа хеш, а не PDF файла. При отваряне на този диалог не се прави заявка.
+	The signed version could not be read.	Подписаната версия не може да бъде прочетена.
+	The time the signature was created	Времето на създаване на подписа
+	Then add a document timestamp (optional):	След това добавете времеви печат на документа (по избор):
+	Timeout (seconds)	Изчакване (секунди)
+	Timestamp (optional)	Времеви печат (по избор)
+	Trust the operating system's root certificates for signatures	Доверяване на коренните сертификати на операционната система за подписи
+	Trusted certificates	Доверени сертификати
+	Trusted root	Доверен корен
+	Trusted timestamp, else claimed signing time	Доверен времеви печат, иначе заявеното време на подписване
+	Validating and saving…	Проверка и запазване…
+	Verify signatures using	Проверка на подписите спрямо
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Ключодържател на macOS, хранилище за сертификати на Windows или системния пакет от CA. Изключено по подразбиране.
+	{n} addresses were not contacted because of Internet access settings.	{n} адреса не бяха потърсени заради настройките за достъп до интернет.
+	{n} certificates added to your trusted certificates.	{n} сертификата са добавени към доверените ви сертификати.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Добавя веригите от сертификати на подписващите и статуса им на отмяна в документа, така че подписите да могат да се проверяват и след изтичането на сертификатите.

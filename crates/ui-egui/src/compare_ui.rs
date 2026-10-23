@@ -477,6 +477,10 @@ impl PdfCraftApp {
         if self.active_ids().is_some_and(|(_, id)| id == run.new) {
             self.right = Some(RightPanel::Compare);
         }
+        // Compare signed version with current opens straight into the side-by-side view.
+        if std::mem::take(&mut self.side_by_side_after_compare) && self.active_ids().is_some_and(|(_, id)| id == run.new) {
+            self.open_side_by_side();
+        }
         self.notify(if n == 0 {
             tl!("The text is the same").to_string()
         } else if n == 1 {

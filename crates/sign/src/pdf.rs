@@ -203,6 +203,43 @@ pub struct TrustStore {
     /// Trust `os_roots` for validating certification signatures. As in Acrobat, this applies
     /// only while `os_for_signatures` is on too.
     pub os_for_certified: bool,
+    /// Per-certificate trust settings for `certs`, by SHA-256 fingerprint ([`Certificate::fingerprint`]).
+    /// A certificate without an entry is trusted for everything ([`CertTrust::default`]).
+    pub settings: Arc<HashMap<String, CertTrust>>,
+    /// Revocation evidence without a `nextUpdate` counts for at most this many seconds after it
+    /// was issued (RFC 6960 §4.2.2.1 and RFC 5280 leave freshness to local policy). `None`:
+    /// no upper bound.
+    pub revocation_max_age: Option<u64>,
+    /// The time [`list_with_time`]'s callers use by default for this store (the Signatures
+    /// panel's Preferences → Signatures → Verification time).
+    pub verification: VerificationTime,
+}
+
+/// What one trusted certificate is trusted for (Acrobat: the certificate's Trust tab).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CertTrust {
+    /// Use it as a trusted root: certificates it issued (directly or through intermediates)
+    /// are trusted too. Off: only signatures made with this very certificate are.
+    pub root: bool,
+    /// Signed documents or data (approval signatures and timestamps).
+    pub signatures: bool,
+    /// Certified documents (certification signatures).
+    pub certified_documents: bool,
+}
+
+impl Default for CertTrust {
+    fn default() -> Self {
+        Self { root: true, signatures: true, certified_documents: true }
+    }
+}
+
+impl CertTrust {
+    fn allows(self, purpose: TrustPurpose) -> bool {
+        match purpose {
+            TrustPurpose::Signatures => self.signatures,
+            TrustPurpose::CertifiedDocuments => self.certified_documents,
+        }
+    }
 }
 
 /// What a chain is being validated for: an approval signature (or a timestamp) or a
@@ -255,11 +292,30 @@ impl TrustStore {
         }
     }
 
+    /// The trust settings of trusted certificate `c` (the default for one without settings).
+    pub fn trust_of(&self, c: &Certificate) -> CertTrust {
+        if self.settings.is_empty() {
+            return CertTrust::default();
+        }
+        self.settings.get(&c.fingerprint()).copied().unwrap_or_default()
+    }
+
     /// The trust source that makes `c` an anchor for `purpose`, if any. The user's own trusted
-    /// certificates win over the operating system's roots.
+    /// certificates win over the operating system's roots; a trusted certificate whose
+    /// settings exclude `purpose` anchors nothing for it.
     pub fn anchor(&self, c: &Certificate, purpose: TrustPurpose) -> Option<TrustSource> {
+        self.anchor_at(c, purpose, true)
+    }
+
+    /// [`TrustStore::anchor`] for `c` at a position in a chain: `leaf` is the certificate that
+    /// signed; above it, a trusted certificate anchors only when it is trusted as a root.
+    fn anchor_at(&self, c: &Certificate, purpose: TrustPurpose, leaf: bool) -> Option<TrustSource> {
         if self.certs.iter().any(|t| t.raw == c.raw) {
-            Some(TrustSource::TrustedCertificates)
+            let settings = self.trust_of(c);
+            if settings.allows(purpose) && (leaf || settings.root) {
+                return Some(TrustSource::TrustedCertificates);
+            }
+            None
         } else if self.os_trusted_for(purpose) && self.os_roots.iter().any(|t| t.raw == c.raw) {
             Some(TrustSource::OperatingSystem)
         } else {
@@ -269,7 +325,7 @@ impl TrustStore {
 
     /// The trust source anchoring `chain` (the first anchored certificate, leaf first).
     pub fn chain_anchor(&self, chain: &[Certificate], purpose: TrustPurpose) -> Option<TrustSource> {
-        chain.iter().find_map(|c| self.anchor(c, purpose))
+        chain.iter().enumerate().find_map(|(i, c)| self.anchor_at(c, purpose, i == 0))
     }
 
     /// Add the anchors for `purpose` to a chain-building pool.
@@ -906,7 +962,7 @@ fn finish_validation(
     // Revocation evidence embedded in the document security store, if any. A verified
     // revocation is final: later blocks must not soften the verdict.
     let signer = info.chain.first().cloned();
-    let revoked = check_dss_revocation(doc, signer.as_ref(), &at, info);
+    let revoked = check_dss_revocation(doc, signer.as_ref(), &at, trust.revocation_max_age, info);
     // Changes after signing.
     info.modification = if covered == bytes.len() || bytes[covered..].iter().all(|b| b.is_ascii_whitespace() || *b == 0) {
         Modification::None
@@ -976,7 +1032,7 @@ fn finish_validation(
 /// Check the revocation evidence in the catalog's `/DSS` against the signer's chain at `at`.
 /// Only evidence whose signature verifies against the issuer counts; returns whether the
 /// certificate is revoked (which invalidates the signature).
-fn check_dss_revocation(doc: &Document, signer: Option<&Certificate>, at: &Option<Time>, info: &mut SignatureInfo) -> bool {
+fn check_dss_revocation(doc: &Document, signer: Option<&Certificate>, at: &Option<Time>, max_age: Option<u64>, info: &mut SignatureInfo) -> bool {
     use crate::revocation::{CertificateList, OcspResponse, RevocationStatus};
     let (Some(signer), Some(at)) = (signer, *at) else { return false };
     let Some(root) = doc.root() else { return false };
@@ -1004,7 +1060,7 @@ fn check_dss_revocation(doc: &Document, signer: Option<&Certificate>, at: &Optio
     for r in pull(b"CRLs") {
         let Ok(list) = CertificateList::parse(&r) else { continue };
         sources.push("CRL");
-        match list.check(signer, issuer, at) {
+        match list.check_with(signer, issuer, at, max_age) {
             RevocationStatus::Revoked { at } => {
                 revoked = Some(at);
                 break;
@@ -1017,7 +1073,7 @@ fn check_dss_revocation(doc: &Document, signer: Option<&Certificate>, at: &Optio
         for r in pull(b"OCSPs") {
             let Ok(resp) = OcspResponse::parse(&r) else { continue };
             sources.push("OCSP");
-            match resp.check(signer, issuer, at) {
+            match resp.check_with(signer, issuer, at, max_age) {
                 RevocationStatus::Revoked { at } => {
                     revoked = Some(at);
                     break;
@@ -1141,7 +1197,7 @@ fn validate_doc_timestamp(
             info.details.push("The timestamp authority's certificate chain is not trusted and valid at the selected verification time.".into());
         }
         if info.status != Status::Invalid {
-            check_dss_revocation(doc, Some(&cert), &at, info);
+            check_dss_revocation(doc, Some(&cert), &at, trust.revocation_max_age, info);
         }
     }
 }
@@ -1469,7 +1525,12 @@ fn dss_parts(doc: &Document, old: &Document) -> HashSet<u32> {
     for (r, role) in dss_walk(doc) {
         let now = doc.get(r);
         let shaped = match (role, &*now) {
-            (DssRole::Dss, Object::Dict(d)) => d.iter().all(|(k, _)| matches!(k.as_slice(), b"Type" | b"Certs" | b"CRLs" | b"OCSPs" | b"VRI")),
+            // `/Filter /Adobe.PPKLite` is what `dss::embed` (and Acrobat) write beside the standard keys.
+            (DssRole::Dss, Object::Dict(d)) => d.iter().all(|(k, v)| match k.as_slice() {
+                b"Type" | b"Certs" | b"CRLs" | b"OCSPs" | b"VRI" => true,
+                b"Filter" => matches!(v, Object::Name(_)),
+                _ => false,
+            }),
             (DssRole::DataArray, Object::Array(a)) => a.iter().all(|e| matches!(e, Object::Ref(_)) && is_stream(e)),
             (DssRole::VriMap, Object::Dict(d)) => d.iter().all(|(_, v)| matches!(&*doc.resolve(v), Object::Dict(_))),
             (DssRole::VriEntry, Object::Dict(d)) => {
@@ -1558,6 +1619,12 @@ fn change_kind(doc: &Document, old: &Document, d: &Dict, before: Option<&Dict>) 
                         acroform_kind(doc, old, &now, None)
                     } else if b.get(b"Perms") != d.get(b"Perms") {
                         "signature"
+                    } else if b.get(b"DSS") != d.get(b"DSS")
+                        && b.get(b"Metadata") == d.get(b"Metadata")
+                        && b.get(b"NeedsRendering") == d.get(b"NeedsRendering")
+                    {
+                        // Only the Document Security Store was added or replaced (LTV).
+                        "document security store"
                     } else {
                         "metadata"
                     }
@@ -1615,11 +1682,15 @@ pub struct Appearance {
     pub location: bool,
     pub distinguished_name: bool,
     pub labels: bool,
+    /// A picture or drawn signature on the left, in place of the signer's name in large type.
+    pub graphic: Option<crate::appearance::SignatureGraphic>,
+    /// A faint logo behind the whole signature.
+    pub logo: Option<crate::appearance::GraphicImage>,
 }
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { name: true, date: true, reason: false, location: false, distinguished_name: false, labels: true }
+        Self { name: true, date: true, reason: false, location: false, distinguished_name: false, labels: true, graphic: None, logo: None }
     }
 }
 
@@ -1842,7 +1913,7 @@ fn sign_inner(
         }
     }
     // The appearance.
-    let ap = appearance(rect, &name, &id.certificate, opts);
+    let ap = appearance(&mut doc, rect, &name, &id.certificate, opts);
     let ap_ref = doc.add(Object::Stream(ap));
     let mut apd = Dict::new();
     apd.set(b"N".to_vec(), Object::Ref(ap_ref));
@@ -1973,7 +2044,7 @@ pub fn display_date(pdf: &str) -> String {
 
 /// The visible signature: the signer's name large on the left, the details on the right
 /// (Acrobat's standard layout), in Helvetica.
-fn appearance(rect: [f64; 4], name: &str, cert: &Certificate, opts: &SignOptions) -> Stream {
+fn appearance(doc: &mut Document, rect: [f64; 4], name: &str, cert: &Certificate, opts: &SignOptions) -> Stream {
     use pdfcraft_fonts::{helvetica_width, literal, win_ansi, wrap};
     let (w, h) = ((rect[2] - rect[0]).max(0.0), (rect[3] - rect[1]).max(0.0));
     let a = &opts.appearance;
@@ -2001,12 +2072,23 @@ fn appearance(rect: [f64; 4], name: &str, cert: &Certificate, opts: &SignOptions
     }
     lines.retain(|l| !l.is_empty());
     let mut out = Vec::new();
+    let mut xobjects = Dict::new();
+    let mut gstates = Dict::new();
     if w > 1.0 && h > 1.0 {
         let pad = (h * 0.06).clamp(1.0, 6.0);
-        let (left_w, right_x) = if a.name { (w * 0.5, w * 0.5 + pad) } else { (0.0, pad) };
+        if let Some(logo) = &a.logo {
+            out.extend(crate::appearance::draw_logo(doc, logo, w, h, &mut xobjects, &mut gstates));
+        }
+        // The left half holds the graphic, or the name in large type.
+        let left = a.name || a.graphic.is_some();
+        let (left_w, right_x) = if left { (w * 0.5, w * 0.5 + pad) } else { (0.0, pad) };
         let right_w = (w - right_x - pad).max(1.0);
+        if let Some(g) = &a.graphic {
+            let area = [pad, pad, (left_w - 2.0 * pad).max(0.0), (h - 2.0 * pad).max(0.0)];
+            out.extend(crate::appearance::draw_graphic(doc, g, area, &mut xobjects));
+        }
         out.extend_from_slice(b"BT\n0 g\n");
-        if a.name {
+        if a.name && a.graphic.is_none() {
             // The name fills the left half.
             let mut size = (h * 0.4).min(36.0);
             let fit = (left_w - 2.0 * pad).max(1.0);
@@ -2053,6 +2135,12 @@ fn appearance(rect: [f64; 4], name: &str, cert: &Certificate, opts: &SignOptions
     fonts.set(b"Helv".to_vec(), Object::Dict(font));
     let mut res = Dict::new();
     res.set(b"Font".to_vec(), Object::Dict(fonts));
+    if !xobjects.is_empty() {
+        res.set(b"XObject".to_vec(), Object::Dict(xobjects));
+    }
+    if !gstates.is_empty() {
+        res.set(b"ExtGState".to_vec(), Object::Dict(gstates));
+    }
     d.set(b"Resources".to_vec(), Object::Dict(res));
     Stream::flate(d, &out)
 }

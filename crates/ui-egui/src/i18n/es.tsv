@@ -2700,3 +2700,109 @@ compare-page	Moved	Movida
 	Select objects with Edit objects first	Seleccione primero objetos con Editar objetos
 	Select a text box, or click into a paragraph, first	Seleccione primero un cuadro de texto o haga clic en un párrafo
 	That didn't work: an internal error stopped it ({m}).	No ha funcionado: lo detuvo un error interno ({m}).
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 la acepta sin importar su antigüedad.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Una respuesta cancelada se descarta. Una solicitud bloqueada se detiene en el plazo configurado (30 segundos como máximo).
+	A certificate file is limited to 4 MiB.	Un archivo de certificado está limitado a 4 MiB.
+	A chosen or claimed date is not cryptographic proof of time.	Una fecha elegida o declarada no es una prueba criptográfica del tiempo.
+	Account name (optional)	Nombre de cuenta (opcional)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	Añada un certificado de TSA a los certificados de confianza solo después de verificar de forma independiente su identidad y su huella. Desactivar esta comprobación guarda un token no fiable; no establece una hora de confianza.
+	Add logo…	Añadir logotipo…
+	Add verification information	Añadir información de verificación
+	Add verification information…	Añadir información de verificación…
+	Allow a timestamp request to the selected server	Permitir una solicitud de sello de tiempo al servidor seleccionado
+	Allow a timestamp request to this server	Permitir una solicitud de sello de tiempo a este servidor
+	Also from sites that Internet access asks about	También de sitios por los que pregunta el acceso a Internet
+	Also trust them for certified documents	Confiar en ellos también para documentos certificados
+	Appearance name	Nombre del aspecto
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Los sitios bloqueados siguen bloqueados. Solo se contacta con los respondedores OCSP y las direcciones CRL de los certificados.
+	CRLs	CRL
+	Cancel operation	Cancelar operación
+	Certificate and revocation checks at:	Comprobación de certificados y revocación en:
+	Certified documents	Documentos certificados
+	Change logo…	Cambiar logotipo…
+	Choose a configured timestamp server.	Elija un servidor de sellos de tiempo configurado.
+	Choose a server	Elija un servidor
+	Choose another picture…	Elegir otra imagen…
+	Choose picture…	Elegir imagen…
+	Clear drawing	Borrar dibujo
+	Compare signed version	Comparar versión firmada
+	Compare signed version with current	Comparar versión firmada con la actual
+	Compare with current	Comparar con la actual
+	Couldn't compare the signed version: {e}	No se pudo comparar la versión firmada: {e}
+	Couldn't use the picture: {e}	No se pudo usar la imagen: {e}
+	Current time	Hora actual
+	Drawn signature	Firma dibujada
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	Incrustar pruebas no establece por sí solo la conformidad con PAdES B-LT/B-LTA. La cobertura incompleta se informa tras la validación.
+	Every certificate's revocation status is now in the document.	El estado de revocación de cada certificado ya está en el documento.
+	Every change since signing is permitted by the signature.	La firma permite todos los cambios hechos desde la firma.
+	Every form field is locked and no later change keeps the signature valid.	Todos los campos del formulario se bloquean y ningún cambio posterior mantiene válida la firma.
+	Fetch revocation information online	Obtener información de revocación en línea
+	Fetch revocation information online when adding verification information	Obtener información de revocación en línea al añadir información de verificación
+	Filling in forms, signing and commenting are permitted (approval signature).	Se permite rellenar formularios, firmar y comentar (firma de aprobación).
+	HTTPS URL	URL HTTPS
+	Import certificates…	Importar certificados…
+	Issued by {issuer}, valid to {date}	Emitido por {issuer}, válido hasta {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Archivos DER locales que añadir también (opcional), una ruta por línea. Los certificados no se consideran de confianza automáticamente.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Archivos DER locales, una ruta por línea. Los certificados no se consideran de confianza automáticamente.
+	Lock document after signing	Bloquear el documento tras firmar
+	Logo	Logotipo
+	Manage timestamp servers in Preferences → Signatures.	Gestione los servidores de sellos de tiempo en Preferencias → Firmas.
+	Maximum age of revocation information without an update time	Antigüedad máxima de la información de revocación sin hora de actualización
+	More changes were found than are listed.	Se encontraron más cambios de los que se muestran.
+	New server	Nuevo servidor
+	No changes are permitted.	No se permite ningún cambio.
+	No saved appearances yet.	Aún no hay aspectos guardados.
+	No server is configured. PdfCraft never contacts one unless you add it here.	No hay ningún servidor configurado. PdfCraft nunca contacta con uno a menos que lo añada aquí.
+	No timestamp	Sin sello de tiempo
+	No trusted certificates yet.	Aún no hay certificados de confianza.
+	Nothing has changed since it was signed.	No ha cambiado nada desde que se firmó.
+	OCSP responses	Respuestas OCSP
+	Only filling in forms and signing are permitted.	Solo se permite rellenar formularios y firmar.
+	Only filling in forms, signing and commenting are permitted.	Solo se permite rellenar formularios, firmar y comentar.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Solo de sitios que el acceso a Internet permite. Abrir o validar un documento nunca se conecta a Internet.
+	Open a signed document first	Abra primero un documento firmado
+	Optional policy OID	OID de política opcional
+	Or UTC date (YYYYMMDDHHmmSSZ)	O fecha UTC (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Páginas: {a} al firmar, {b} ahora
+	Picture	Imagen
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Las imágenes se pueden elegir en la aplicación de escritorio; aquí dibuje su firma.
+	Remove logo	Quitar logotipo
+	Remove picture	Quitar imagen
+	Require an explicitly trusted timestamp authority	Exigir una autoridad de sellado de tiempo de confianza explícita
+	Revocation information for {covered} of {needed} certificates was fetched.	Se obtuvo información de revocación de {covered} de {needed} certificados.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Guarde un aspecto desde el cuadro de firma: su texto, una imagen o firma dibujada y un logotipo.
+	Save appearance	Guardar aspecto
+	Save result…	Guardar resultado…
+	Save server	Guardar servidor
+	Saved appearances	Aspectos guardados
+	Saved the appearance {name}	Se guardó el aspecto {name}
+	Secure time (timestamp), else the signing time	Hora segura (sello de tiempo); si no, la hora de firma
+	Show on the left	Mostrar a la izquierda
+	Sign here with your mouse, pen or finger	Firme aquí con el ratón, un lápiz o el dedo
+	Signature appearances	Aspectos de firma
+	Signature operation	Operación de firma
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Se confía en las firmas cuyos certificados se encadenan a uno de estos. Elija para qué es de confianza cada uno.
+	Signed documents	Documentos firmados
+	Signed version of {field} (revision {n})	Versión firmada de {field} (revisión {n})
+	Some changes since signing are not permitted by the signature.	La firma no permite algunos cambios hechos desde la firma.
+	Text only	Solo texto
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	El panel Firmas comprueba los certificados y la revocación en este momento. Una hora de firma sin sello de tiempo de confianza es solo lo que declara el firmante.
+	The current time	La hora actual
+	The password is kept only until PdfCraft quits, never saved.	La contraseña se conserva solo hasta que PdfCraft se cierra; nunca se guarda.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	La solicitud contiene un resumen, no el PDF. No se hace ninguna solicitud al abrir este cuadro.
+	The signed version could not be read.	No se pudo leer la versión firmada.
+	The time the signature was created	La hora en que se creó la firma
+	Then add a document timestamp (optional):	Después añadir un sello de tiempo al documento (opcional):
+	Timeout (seconds)	Tiempo de espera (segundos)
+	Timestamp (optional)	Sello de tiempo (opcional)
+	Trust the operating system's root certificates for signatures	Confiar en los certificados raíz del sistema operativo para firmas
+	Trusted certificates	Certificados de confianza
+	Trusted root	Raíz de confianza
+	Trusted timestamp, else claimed signing time	Sello de tiempo de confianza; si no, la hora de firma declarada
+	Validating and saving…	Validando y guardando…
+	Verify signatures using	Verificar las firmas usando
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Llavero de macOS, almacén de certificados de Windows o el paquete de CA del sistema. Desactivado de forma predeterminada.
+	{n} addresses were not contacted because of Internet access settings.	No se contactó con {n} direcciones por la configuración del acceso a Internet.
+	{n} certificates added to your trusted certificates.	Se añadieron {n} certificados a sus certificados de confianza.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Añade al documento las cadenas de certificados de los firmantes y su estado de revocación, para que las firmas puedan comprobarse aunque los certificados caduquen.

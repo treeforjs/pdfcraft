@@ -28,6 +28,10 @@ pub struct TimestampServer {
     pub timeout_seconds: u32,
     /// Untrusted certificates are never added to the trust store automatically.
     pub require_trusted_authority: bool,
+    /// An account name for a server that needs one (HTTP Basic authentication, over HTTPS or a
+    /// loopback address only). Its password is held for the session, never saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
 }
 
 impl TimestampServer {
@@ -45,6 +49,11 @@ impl TimestampServer {
         }
         if !(1..=30).contains(&self.timeout_seconds) {
             return Err("Timestamp timeout must be between 1 and 30 seconds.".into());
+        }
+        if let Some(user) = &self.username
+            && (user.is_empty() || user.len() > 200 || user.contains(':') || user.chars().any(char::is_control))
+        {
+            return Err("A timestamp account name must be 1 to 200 characters, without colons or control characters.".into());
         }
         if let Some(policy) = &self.policy {
             if policy.len() > 200 {
@@ -76,14 +85,29 @@ pub struct HttpTimestampAuthority {
     server: TimestampServer,
     trust: TrustStore,
     cancellation: SignatureCancellation,
+    password: Option<String>,
 }
 
 impl HttpTimestampAuthority {
     /// Constructing a transport does not send a request. Callers must obtain the server from
     /// an explicit user action or an automation call with network access opted in.
     pub fn new(server: TimestampServer, certificates: Vec<Certificate>, cancellation: SignatureCancellation) -> Result<Self, String> {
+        Self::with_trust(server, TrustStore::new(certificates), None, cancellation)
+    }
+
+    /// With the session's whole trust store (per-certificate settings and the operating
+    /// system's roots, when trusted) and the account password for a server that has a user name.
+    pub fn with_trust(
+        server: TimestampServer,
+        trust: TrustStore,
+        password: Option<String>,
+        cancellation: SignatureCancellation,
+    ) -> Result<Self, String> {
         server.validate()?;
-        Ok(Self { server, trust: TrustStore::new(certificates), cancellation })
+        if server.username.is_some() && password.is_none() {
+            return Err(format!("Enter the password for the timestamp server {:?}; it is kept only until PdfCraft quits.", server.name));
+        }
+        Ok(Self { server, trust, cancellation, password })
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -96,9 +120,9 @@ impl HttpTimestampAuthority {
         }
         if self.server.require_trusted_authority {
             let mut pool = pdfcraft_sign::timestamp::token_certs(&token.raw);
-            pool.extend(self.trust.certs.iter().cloned());
-            let chain = pdfcraft_sign::x509::build_chain(&signer, &pool, Some(token.gen_time));
-            if !chain.iter().any(|cert| self.trust.certs.iter().any(|trusted| cert.raw == trusted.raw)) {
+            self.trust.extend_pool(&mut pool, pdfcraft_sign::TrustPurpose::Signatures);
+            let chain: Vec<Certificate> = pdfcraft_sign::x509::build_chain(&signer, &pool, Some(token.gen_time)).into_iter().cloned().collect();
+            if self.trust.chain_anchor(&chain, pdfcraft_sign::TrustPurpose::Signatures).is_none() {
                 return Err(SignError::Crypto("The timestamp authority is not trusted. Import its independently verified certificate chain, or explicitly allow an untrusted timestamp; no certificate was trusted automatically.".into()));
             }
         }
@@ -128,6 +152,8 @@ impl TimestampAuthority for HttpTimestampAuthority {
             .timeout_global(Some(Duration::from_secs(u64::from(self.server.timeout_seconds))))
             .timeout_connect(Some(Duration::from_secs(5)))
             .max_redirects(0)
+            // Statuses are answered below (a refused account, a redirect) rather than as errors.
+            .http_status_as_error(false)
             .tls_config(ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::new_with_certs(&roots)).build());
         // A literal loopback endpoint is local by construction; do not send synthetic/local
         // authorities through an environment proxy. HTTPS otherwise follows OS/proxy policy.
@@ -135,13 +161,20 @@ impl TimestampAuthority for HttpTimestampAuthority {
             config = config.proxy(None);
         }
         let agent = config.build().new_agent();
-        let mut response = agent
+        let mut post = agent
             .post(&self.server.url)
             .header("Content-Type", "application/timestamp-query")
             .header("Accept", "application/timestamp-reply")
-            .header("User-Agent", concat!("PdfCraft/", env!("CARGO_PKG_VERSION")))
-            .send(request.as_slice())
-            .map_err(|error| SignError::Pdf(format!("Timestamp request failed: {error}")))?;
+            .header("User-Agent", concat!("PdfCraft/", env!("CARGO_PKG_VERSION")));
+        if let (Some(user), Some(password)) = (&self.server.username, &self.password) {
+            use base64::Engine as _;
+            let token = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
+            post = post.header("Authorization", format!("Basic {token}"));
+        }
+        let mut response = post.send(request.as_slice()).map_err(|error| SignError::Pdf(format!("Timestamp request failed: {error}")))?;
+        if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
+            return Err(SignError::Pdf("The timestamp server refused the account name or password.".into()));
+        }
         if response.status().as_u16() != 200 {
             return Err(SignError::Pdf(format!("Timestamp server returned HTTP {}; redirects are not followed.", response.status())));
         }
@@ -171,7 +204,7 @@ impl TimestampAuthority for HttpTimestampAuthority {
     #[cfg(target_arch = "wasm32")]
     fn timestamp(&self, _request: &[u8]) -> Result<Vec<u8>, SignError> {
         self.cancellation.check()?;
-        let _ = (&self.server, &self.trust);
+        let _ = (&self.server, &self.trust, &self.password);
         Err(SignError::Unsupported("online timestamp transport is available in native PdfCraft; browser transport is not configured".into()))
     }
 }
@@ -184,6 +217,14 @@ pub struct SignatureJob {
     cos: pdfcraft_cos::Document,
     date: String,
     trust: TrustStore,
+    now: Time,
+}
+
+/// What adding verification information did: the requests and the coverage check.
+#[derive(Clone, Debug)]
+pub struct LtvReport {
+    pub fetched: crate::revocation_fetch::Fetched,
+    pub evidence: pdfcraft_sign::evidence::EvidenceReport,
 }
 
 pub struct SignatureResult {
@@ -227,6 +268,40 @@ impl SignatureJob {
         }
         Ok((self.finish(bytes), report))
     }
+    /// Add verification information (LTV): the signatures' chains, revocation evidence fetched
+    /// under `policy` (see [`crate::revocation_fetch`]) and `local` evidence (files the user
+    /// chose), checked and embedded in the Document Security Store; then, with `authority`, a
+    /// document timestamp over it all (PAdES B-LTA). Runs on a worker: it may wait on the network.
+    pub fn add_verification_information(
+        self,
+        local: &pdfcraft_sign::dss::Evidence,
+        policy: &crate::revocation_fetch::FetchPolicy,
+        transport: &dyn crate::revocation_fetch::RevocationTransport,
+        authority: Option<&dyn TimestampAuthority>,
+    ) -> Result<(SignatureResult, LtvReport), EditError> {
+        let signatures = pdfcraft_sign::pdf::list_with_time(&self.cos, &self.source, &self.trust, self.trust.verification);
+        if !signatures.iter().any(|s| s.signed) {
+            return Err(EditError::Invalid("The document has no signatures to add verification information to.".into()));
+        }
+        let mut fetched = crate::revocation_fetch::gather(&signatures, &self.trust, policy, transport, self.now);
+        let mut evidence = fetched.evidence.clone();
+        for (from, to) in [(&local.certs, &mut evidence.certs), (&local.crls, &mut evidence.crls), (&local.ocsps, &mut evidence.ocsps)] {
+            for item in from {
+                if !to.contains(item) {
+                    to.push(item.clone());
+                }
+            }
+        }
+        fetched.evidence = evidence.clone();
+        let report = pdfcraft_sign::evidence::check(&self.cos, &self.source, &evidence, &self.trust, self.trust.verification)?;
+        let mut bytes = pdfcraft_sign::dss::embed(&self.cos, &evidence)?;
+        if let Some(authority) = authority {
+            let doc = pdfcraft_cos::Document::open(Arc::new(bytes)).map_err(|e| EditError::Sign(e.to_string()))?;
+            bytes = pdfcraft_sign::timestamp_document(&doc, authority, &self.date)?;
+        }
+        Ok((self.finish(bytes), LtvReport { fetched, evidence: report }))
+    }
+
     fn finish(self, bytes: Vec<u8>) -> SignatureResult {
         SignatureResult { doc: self.doc, generation: self.generation, source: self.source, bytes: Arc::new(bytes) }
     }
@@ -243,6 +318,7 @@ impl Session {
             cos: editor.cos.clone(),
             date: self.signing_date(),
             trust: (*doc.trust).clone(),
+            now: Time::from_unix(self.now_secs()),
         })
     }
     /// Check immediately before writing the result. A stale result must not overwrite the
@@ -304,6 +380,26 @@ impl Session {
         crate::guard(|| pdfcraft_sign::compare_signed_version(&editor.cos, &doc.bytes, &sig, doc.password.as_deref()))
             .map_err(|m| format!("comparing failed unexpectedly ({m})"))?
             .map_err(|e| e.to_string())
+    }
+
+    /// The rules a run that adds verification information follows: the network only with
+    /// `network` and Preferences → Signatures → fetch revocation information on, every address
+    /// checked against the internet-access policy (`allow_prompted`: the user agreed to the
+    /// sites it would ask about).
+    pub fn revocation_fetch_policy(&self, network: bool, allow_prompted: bool) -> crate::revocation_fetch::FetchPolicy {
+        crate::revocation_fetch::FetchPolicy {
+            network: network && self.fetch_revocation(),
+            urls: self.url_policy().clone(),
+            allow_prompted,
+            max_age: self.trust.revocation_max_age,
+            ..Default::default()
+        }
+    }
+
+    /// The trust store validation uses (trusted certificates, their settings, the operating
+    /// system's roots when trusted, the verification time and revocation policy).
+    pub fn trust_store(&self) -> &TrustStore {
+        &self.trust
     }
 
     /// Read-only validation at an explicit time; signatures and trust are never changed.

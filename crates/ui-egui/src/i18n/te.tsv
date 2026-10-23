@@ -2738,3 +2738,109 @@ compare-page	Moved	తరలించబడింది
 	Select objects with Edit objects first	ముందుగా వస్తువులను సవరించు సాధనంతో వస్తువులను ఎంచుకోండి
 	Select a text box, or click into a paragraph, first	ముందుగా ఒక టెక్స్ట్ బాక్స్‌ను ఎంచుకోండి, లేదా ఒక పేరాలో క్లిక్ చేయండి
 	That didn't work: an internal error stopped it ({m}).	అది పని చేయలేదు: అంతర్గత లోపం దాన్ని ఆపింది ({m}).
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 అయితే ఎంత పాతదైనా అంగీకరిస్తుంది.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	రద్దు చేసిన ప్రతిస్పందన విస్మరించబడుతుంది. నిలిచిపోయిన అభ్యర్థన సెట్ చేసిన గడువులో (గరిష్టంగా 30 సెకన్లు) ఆగుతుంది.
+	A certificate file is limited to 4 MiB.	సర్టిఫికేట్ ఫైల్ 4 MiB కి పరిమితం.
+	A chosen or claimed date is not cryptographic proof of time.	ఎంచుకున్న లేదా ప్రకటించిన తేదీ సమయానికి క్రిప్టోగ్రాఫిక్ రుజువు కాదు.
+	Account name (optional)	ఖాతా పేరు (ఐచ్ఛికం)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA సర్టిఫికేట్ గుర్తింపు మరియు ఫింగర్‌ప్రింట్‌ను స్వతంత్రంగా ధృవీకరించిన తర్వాతే దానిని విశ్వసనీయ సర్టిఫికేట్‌లకు జోడించండి. ఈ తనిఖీని నిలిపివేస్తే విశ్వసనీయం కాని టోకెన్ సేవ్ అవుతుంది; అది విశ్వసనీయ సమయాన్ని నిర్ధారించదు.
+	Add logo…	లోగోను జోడించు…
+	Add verification information	ధృవీకరణ సమాచారాన్ని జోడించు
+	Add verification information…	ధృవీకరణ సమాచారాన్ని జోడించు…
+	Allow a timestamp request to the selected server	ఎంచుకున్న సర్వర్‌కు టైమ్‌స్టాంప్ అభ్యర్థనను అనుమతించు
+	Allow a timestamp request to this server	ఈ సర్వర్‌కు టైమ్‌స్టాంప్ అభ్యర్థనను అనుమతించు
+	Also from sites that Internet access asks about	ఇంటర్నెట్ యాక్సెస్ అడిగే సైట్‌ల నుండి కూడా
+	Also trust them for certified documents	ధృవీకరించిన పత్రాల కోసం కూడా వాటిని విశ్వసించు
+	Appearance name	రూపం పేరు
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	నిరోధించిన సైట్‌లు నిరోధించబడే ఉంటాయి. సర్టిఫికేట్‌ల OCSP రెస్పాండర్‌లు మరియు CRL చిరునామాలను మాత్రమే సంప్రదిస్తుంది.
+	CRLs	CRLలు
+	Cancel operation	ఆపరేషన్‌ను రద్దు చేయి
+	Certificate and revocation checks at:	సర్టిఫికేట్ మరియు రద్దు తనిఖీల సమయం:
+	Certified documents	ధృవీకరించిన పత్రాలు
+	Change logo…	లోగోను మార్చు…
+	Choose a configured timestamp server.	కాన్ఫిగర్ చేసిన టైమ్‌స్టాంప్ సర్వర్‌ను ఎంచుకోండి.
+	Choose a server	సర్వర్‌ను ఎంచుకోండి
+	Choose another picture…	మరో చిత్రాన్ని ఎంచుకో…
+	Choose picture…	చిత్రాన్ని ఎంచుకో…
+	Clear drawing	డ్రాయింగ్‌ను తుడిచివేయి
+	Compare signed version	సంతకం చేసిన వెర్షన్‌ను పోల్చు
+	Compare signed version with current	సంతకం చేసిన వెర్షన్‌ను ప్రస్తుతదానితో పోల్చు
+	Compare with current	ప్రస్తుతదానితో పోల్చు
+	Couldn't compare the signed version: {e}	సంతకం చేసిన వెర్షన్‌ను పోల్చలేకపోయాము: {e}
+	Couldn't use the picture: {e}	చిత్రాన్ని ఉపయోగించలేకపోయాము: {e}
+	Current time	ప్రస్తుత సమయం
+	Drawn signature	గీసిన సంతకం
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	సాక్ష్యాన్ని పొందుపరచడం మాత్రమే PAdES B-LT/B-LTA అనుగుణ్యతను నిర్ధారించదు. అసంపూర్ణ కవరేజ్ ధృవీకరణ తర్వాత నివేదించబడుతుంది.
+	Every certificate's revocation status is now in the document.	ప్రతి సర్టిఫికేట్ రద్దు స్థితి ఇప్పుడు పత్రంలో ఉంది.
+	Every change since signing is permitted by the signature.	సంతకం తర్వాతి ప్రతి మార్పును సంతకం అనుమతిస్తుంది.
+	Every form field is locked and no later change keeps the signature valid.	ప్రతి ఫారమ్ ఫీల్డ్ లాక్ అవుతుంది; తర్వాతి ఏ మార్పు అయినా సంతకాన్ని చెల్లకుండా చేస్తుంది.
+	Fetch revocation information online	రద్దు సమాచారాన్ని ఆన్‌లైన్‌లో పొందు
+	Fetch revocation information online when adding verification information	ధృవీకరణ సమాచారాన్ని జోడించేటప్పుడు రద్దు సమాచారాన్ని ఆన్‌లైన్‌లో పొందు
+	Filling in forms, signing and commenting are permitted (approval signature).	ఫారమ్‌లు నింపడం, సంతకం చేయడం మరియు వ్యాఖ్యానించడం అనుమతించబడతాయి (ఆమోద సంతకం).
+	HTTPS URL	HTTPS URL
+	Import certificates…	సర్టిఫికేట్‌లను దిగుమతి చేయి…
+	Issued by {issuer}, valid to {date}	{issuer} జారీ చేసింది, {date} వరకు చెల్లుతుంది
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	అదనంగా జోడించాల్సిన స్థానిక DER ఫైల్‌లు (ఐచ్ఛికం), పంక్తికి ఒక మార్గం. సర్టిఫికేట్‌లు స్వయంచాలకంగా విశ్వసనీయం కావు.
+	Local DER files, one path per line. Certificates are not automatically trusted.	స్థానిక DER ఫైల్‌లు, పంక్తికి ఒక మార్గం. సర్టిఫికేట్‌లు స్వయంచాలకంగా విశ్వసనీయం కావు.
+	Lock document after signing	సంతకం తర్వాత పత్రాన్ని లాక్ చేయి
+	Logo	లోగో
+	Manage timestamp servers in Preferences → Signatures.	టైమ్‌స్టాంప్ సర్వర్‌లను ప్రాధాన్యతలు → సంతకాలు లో నిర్వహించండి.
+	Maximum age of revocation information without an update time	నవీకరణ సమయం లేని రద్దు సమాచారపు గరిష్ఠ వయస్సు
+	More changes were found than are listed.	జాబితాలో ఉన్నవాటి కంటే ఎక్కువ మార్పులు కనుగొనబడ్డాయి.
+	New server	కొత్త సర్వర్
+	No changes are permitted.	ఏ మార్పులూ అనుమతించబడవు.
+	No saved appearances yet.	ఇంకా సేవ్ చేసిన రూపాలు లేవు.
+	No server is configured. PdfCraft never contacts one unless you add it here.	ఏ సర్వర్ కాన్ఫిగర్ కాలేదు. మీరు ఇక్కడ జోడిస్తే తప్ప PdfCraft ఏ సర్వర్‌నూ సంప్రదించదు.
+	No timestamp	టైమ్‌స్టాంప్ లేదు
+	No trusted certificates yet.	ఇంకా విశ్వసనీయ సర్టిఫికేట్‌లు లేవు.
+	Nothing has changed since it was signed.	సంతకం చేసినప్పటి నుండి ఏమీ మారలేదు.
+	OCSP responses	OCSP ప్రతిస్పందనలు
+	Only filling in forms and signing are permitted.	ఫారమ్‌లు నింపడం మరియు సంతకం చేయడం మాత్రమే అనుమతించబడతాయి.
+	Only filling in forms, signing and commenting are permitted.	ఫారమ్‌లు నింపడం, సంతకం చేయడం మరియు వ్యాఖ్యానించడం మాత్రమే అనుమతించబడతాయి.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	ఇంటర్నెట్ యాక్సెస్ అనుమతించే సైట్‌ల నుండి మాత్రమే. పత్రాన్ని తెరవడం లేదా ధృవీకరించడం ఎప్పుడూ ఆన్‌లైన్‌కు వెళ్లదు.
+	Open a signed document first	ముందుగా సంతకం చేసిన పత్రాన్ని తెరవండి
+	Optional policy OID	ఐచ్ఛిక పాలసీ OID
+	Or UTC date (YYYYMMDDHHmmSSZ)	లేదా UTC తేదీ (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	పేజీలు: సంతకం సమయంలో {a}, ఇప్పుడు {b}
+	Picture	చిత్రం
+	Pictures can be chosen in the desktop app; draw your signature here instead.	చిత్రాలను డెస్క్‌టాప్ యాప్‌లో ఎంచుకోవచ్చు; ఇక్కడ మీ సంతకాన్ని గీయండి.
+	Remove logo	లోగోను తీసివేయి
+	Remove picture	చిత్రాన్ని తీసివేయి
+	Require an explicitly trusted timestamp authority	స్పష్టంగా విశ్వసించిన టైమ్‌స్టాంప్ అథారిటీ అవసరం
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} సర్టిఫికేట్‌లలో {covered} కోసం రద్దు సమాచారం పొందబడింది.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	సంతకం డైలాగ్ నుండి రూపాన్ని సేవ్ చేయండి: దాని వచనం, చిత్రం లేదా గీసిన సంతకం, మరియు లోగో.
+	Save appearance	రూపాన్ని సేవ్ చేయి
+	Save result…	ఫలితాన్ని సేవ్ చేయి…
+	Save server	సర్వర్‌ను సేవ్ చేయి
+	Saved appearances	సేవ్ చేసిన రూపాలు
+	Saved the appearance {name}	{name} రూపం సేవ్ చేయబడింది
+	Secure time (timestamp), else the signing time	సురక్షిత సమయం (టైమ్‌స్టాంప్), లేకపోతే సంతకం సమయం
+	Show on the left	ఎడమవైపు చూపు
+	Sign here with your mouse, pen or finger	మౌస్, పెన్ లేదా వేలితో ఇక్కడ సంతకం చేయండి
+	Signature appearances	సంతకం రూపాలు
+	Signature operation	సంతకం ఆపరేషన్
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	వీటిలో ఒకదానికి గొలుసుగా కలిసే సర్టిఫికేట్‌లున్న సంతకాలు విశ్వసనీయం. ప్రతిదాన్ని దేనికి విశ్వసించాలో ఎంచుకోండి.
+	Signed documents	సంతకం చేసిన పత్రాలు
+	Signed version of {field} (revision {n})	{field} యొక్క సంతకం చేసిన వెర్షన్ (పునర్విమర్శ {n})
+	Some changes since signing are not permitted by the signature.	సంతకం తర్వాతి కొన్ని మార్పులను సంతకం అనుమతించదు.
+	Text only	వచనం మాత్రమే
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	సంతకాల ప్యానెల్ ఈ సమయానికి సర్టిఫికేట్‌లను మరియు రద్దును తనిఖీ చేస్తుంది. విశ్వసనీయ టైమ్‌స్టాంప్ లేని సంతకం సమయం సంతకందారు స్వయంగా చెప్పుకున్నదే.
+	The current time	ప్రస్తుత సమయం
+	The password is kept only until PdfCraft quits, never saved.	పాస్‌వర్డ్ PdfCraft మూసే వరకు మాత్రమే ఉంచబడుతుంది, ఎప్పుడూ సేవ్ కాదు.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	అభ్యర్థనలో డైజెస్ట్ ఉంటుంది, PDF కాదు. ఈ డైలాగ్ తెరిచినప్పుడు ఏ అభ్యర్థనా చేయబడదు.
+	The signed version could not be read.	సంతకం చేసిన వెర్షన్‌ను చదవలేకపోయాము.
+	The time the signature was created	సంతకం సృష్టించిన సమయం
+	Then add a document timestamp (optional):	తర్వాత పత్రం టైమ్‌స్టాంప్‌ను జోడించండి (ఐచ్ఛికం):
+	Timeout (seconds)	సమయ పరిమితి (సెకన్లు)
+	Timestamp (optional)	టైమ్‌స్టాంప్ (ఐచ్ఛికం)
+	Trust the operating system's root certificates for signatures	సంతకాల కోసం ఆపరేటింగ్ సిస్టమ్ రూట్ సర్టిఫికేట్‌లను విశ్వసించు
+	Trusted certificates	విశ్వసనీయ సర్టిఫికేట్‌లు
+	Trusted root	విశ్వసనీయ రూట్
+	Trusted timestamp, else claimed signing time	విశ్వసనీయ టైమ్‌స్టాంప్, లేకపోతే ప్రకటించిన సంతకం సమయం
+	Validating and saving…	ధృవీకరిస్తూ సేవ్ చేస్తోంది…
+	Verify signatures using	సంతకాలను దీనితో ధృవీకరించు
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS కీచైన్, Windows సర్టిఫికేట్ స్టోర్ లేదా సిస్టమ్ CA బండిల్. డిఫాల్ట్‌గా ఆఫ్.
+	{n} addresses were not contacted because of Internet access settings.	ఇంటర్నెట్ యాక్సెస్ సెట్టింగ్‌ల కారణంగా {n} చిరునామాలను సంప్రదించలేదు.
+	{n} certificates added to your trusted certificates.	మీ విశ్వసనీయ సర్టిఫికేట్‌లకు {n} సర్టిఫికేట్‌లు జోడించబడ్డాయి.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	సంతకందారుల సర్టిఫికేట్ గొలుసులను మరియు వాటి రద్దు స్థితిని పత్రానికి జోడిస్తుంది, తద్వారా సర్టిఫికేట్‌ల గడువు ముగిసిన తర్వాత కూడా సంతకాలను తనిఖీ చేయవచ్చు.

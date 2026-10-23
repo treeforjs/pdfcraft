@@ -2776,3 +2776,109 @@ compare-page	Moved	移動
 	Numbering other files arrives on the web with folder pickers	他のファイルへの番号付けは、フォルダー選択とともに Web 版に追加予定です
 	Select objects with Edit objects first	先に「オブジェクトを編集」でオブジェクトを選択してください
 	Select a text box, or click into a paragraph, first	先にテキストボックスを選択するか、段落内をクリックしてください
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 にすると古さに関係なく受け入れます。
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	キャンセルした応答は破棄されます。応答のない要求は設定した期限（最大 30 秒）で停止します。
+	A certificate file is limited to 4 MiB.	証明書ファイルは 4 MiB までです。
+	A chosen or claimed date is not cryptographic proof of time.	選択した日時や自己申告の日時は、暗号による時刻の証明ではありません。
+	Account name (optional)	アカウント名（省略可）
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA の証明書は、身元とフィンガープリントを別途確認してから信頼済み証明書に追加してください。この確認を無効にすると信頼されないトークンが保存され、信頼できる時刻にはなりません。
+	Add logo…	ロゴを追加…
+	Add verification information	検証情報を追加
+	Add verification information…	検証情報を追加…
+	Allow a timestamp request to the selected server	選択したサーバーへのタイムスタンプ要求を許可
+	Allow a timestamp request to this server	このサーバーへのタイムスタンプ要求を許可
+	Also from sites that Internet access asks about	インターネットアクセスで確認が必要なサイトからも
+	Also trust them for certified documents	認証済み文書にも信頼する
+	Appearance name	表示方法の名前
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	ブロックしたサイトはブロックされたままです。接続するのは証明書の OCSP レスポンダーと CRL のアドレスだけです。
+	CRLs	CRL
+	Cancel operation	操作をキャンセル
+	Certificate and revocation checks at:	証明書と失効の確認時点:
+	Certified documents	認証済み文書
+	Change logo…	ロゴを変更…
+	Choose a configured timestamp server.	設定済みのタイムスタンプサーバーを選択してください。
+	Choose a server	サーバーを選択
+	Choose another picture…	別の画像を選択…
+	Choose picture…	画像を選択…
+	Clear drawing	描画を消去
+	Compare signed version	署名済みバージョンを比較
+	Compare signed version with current	署名済みバージョンを現在のものと比較
+	Compare with current	現在のものと比較
+	Couldn't compare the signed version: {e}	署名済みバージョンを比較できませんでした: {e}
+	Couldn't use the picture: {e}	画像を使用できませんでした: {e}
+	Current time	現在時刻
+	Drawn signature	手書きの署名
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	証拠を埋め込むだけでは PAdES B-LT/B-LTA への準拠にはなりません。不完全な範囲は検証後に報告されます。
+	Every certificate's revocation status is now in the document.	すべての証明書の失効状態が文書に含まれました。
+	Every change since signing is permitted by the signature.	署名後の変更はすべて署名で許可されています。
+	Every form field is locked and no later change keeps the signature valid.	すべてのフォームフィールドがロックされ、以降に変更すると署名は有効でなくなります。
+	Fetch revocation information online	失効情報をオンラインで取得
+	Fetch revocation information online when adding verification information	検証情報を追加するときに失効情報をオンラインで取得
+	Filling in forms, signing and commenting are permitted (approval signature).	フォームへの入力、署名、注釈が許可されています（承認署名）。
+	HTTPS URL	HTTPS URL
+	Import certificates…	証明書を読み込む…
+	Issued by {issuer}, valid to {date}	発行者: {issuer}、有効期限: {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	追加するローカルの DER ファイル（省略可）。1 行に 1 つのパスを入力します。証明書は自動的には信頼されません。
+	Local DER files, one path per line. Certificates are not automatically trusted.	ローカルの DER ファイル。1 行に 1 つのパスを入力します。証明書は自動的には信頼されません。
+	Lock document after signing	署名後に文書をロック
+	Logo	ロゴ
+	Manage timestamp servers in Preferences → Signatures.	タイムスタンプサーバーは 環境設定 → 署名 で管理します。
+	Maximum age of revocation information without an update time	更新時刻のない失効情報の最大経過時間
+	More changes were found than are listed.	一覧にある以上の変更が見つかりました。
+	New server	新しいサーバー
+	No changes are permitted.	変更は許可されていません。
+	No saved appearances yet.	保存した表示方法はまだありません。
+	No server is configured. PdfCraft never contacts one unless you add it here.	サーバーは設定されていません。ここで追加しない限り、PdfCraft がサーバーに接続することはありません。
+	No timestamp	タイムスタンプなし
+	No trusted certificates yet.	信頼済み証明書はまだありません。
+	Nothing has changed since it was signed.	署名後に変更はありません。
+	OCSP responses	OCSP 応答
+	Only filling in forms and signing are permitted.	許可されているのはフォームへの入力と署名だけです。
+	Only filling in forms, signing and commenting are permitted.	許可されているのはフォームへの入力、署名、注釈だけです。
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	インターネットアクセスで許可されたサイトからのみ取得します。文書を開いたり検証したりするだけでは接続しません。
+	Open a signed document first	先に署名済みの文書を開いてください
+	Optional policy OID	ポリシー OID（省略可）
+	Or UTC date (YYYYMMDDHHmmSSZ)	または UTC 日時（YYYYMMDDHHmmSSZ）
+	Pages: {a} when signed, {b} now	ページ数: 署名時 {a}、現在 {b}
+	Picture	画像
+	Pictures can be chosen in the desktop app; draw your signature here instead.	画像はデスクトップアプリで選択できます。ここでは署名を手書きしてください。
+	Remove logo	ロゴを削除
+	Remove picture	画像を削除
+	Require an explicitly trusted timestamp authority	明示的に信頼したタイムスタンプ局を必須にする
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} 件中 {covered} 件の証明書の失効情報を取得しました。
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	署名ダイアログで表示方法（テキスト、画像または手書きの署名、ロゴ）を保存できます。
+	Save appearance	表示方法を保存
+	Save result…	結果を保存…
+	Save server	サーバーを保存
+	Saved appearances	保存した表示方法
+	Saved the appearance {name}	表示方法「{name}」を保存しました
+	Secure time (timestamp), else the signing time	安全な時刻（タイムスタンプ）、なければ署名時刻
+	Show on the left	左側に表示
+	Sign here with your mouse, pen or finger	マウス、ペン、または指でここに署名してください
+	Signature appearances	署名の表示方法
+	Signature operation	署名の操作
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	証明書チェーンがこれらのいずれかにつながる署名は信頼されます。各証明書を何に信頼するかを選択してください。
+	Signed documents	署名済み文書
+	Signed version of {field} (revision {n})	{field} の署名済みバージョン（リビジョン {n}）
+	Some changes since signing are not permitted by the signature.	署名後の変更の一部は署名で許可されていません。
+	Text only	テキストのみ
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	署名パネルはこの時点で証明書と失効を確認します。信頼できるタイムスタンプのない署名時刻は、署名者の自己申告にすぎません。
+	The current time	現在の時刻
+	The password is kept only until PdfCraft quits, never saved.	パスワードは PdfCraft を終了するまでだけ保持され、保存されることはありません。
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	要求に含まれるのはダイジェストで、PDF ではありません。このダイアログを開いただけでは要求は送信されません。
+	The signed version could not be read.	署名済みバージョンを読み取れませんでした。
+	The time the signature was created	署名が作成された時刻
+	Then add a document timestamp (optional):	続けて文書タイムスタンプを追加（省略可）:
+	Timeout (seconds)	タイムアウト（秒）
+	Timestamp (optional)	タイムスタンプ（省略可）
+	Trust the operating system's root certificates for signatures	署名にオペレーティングシステムのルート証明書を信頼する
+	Trusted certificates	信頼済み証明書
+	Trusted root	信頼済みルート
+	Trusted timestamp, else claimed signing time	信頼できるタイムスタンプ、なければ申告された署名時刻
+	Validating and saving…	検証して保存しています…
+	Verify signatures using	署名の検証に使う時刻
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS のキーチェーン、Windows の証明書ストア、またはシステムの CA バンドル。既定ではオフです。
+	{n} addresses were not contacted because of Internet access settings.	インターネットアクセスの設定により、{n} 件のアドレスには接続しませんでした。
+	{n} certificates added to your trusted certificates.	{n} 件の証明書を信頼済み証明書に追加しました。
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	署名者の証明書チェーンと失効状態を文書に追加し、証明書の期限が切れた後も署名を確認できるようにします。
