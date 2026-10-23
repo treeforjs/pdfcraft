@@ -10010,11 +10010,11 @@ title = "Hosted web app deployment"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["xtask/src/gates.rs::web_deploy_stays_off_until_enabled"]
+notes = "`.github/workflows/web.yml` builds the static site from main (the release zip's: app, OCR models, craft-fonts) and publishes it with GitHub Pages at treeforjs.github.io/pdfcraft. Off until a maintainer selects Pages source GitHub Actions and sets the repository variable PDFCRAFT_WEB_DEPLOY=true; then every push to main deploys. A manual run builds without publishing (or republishes main with deploy ticked). Steps in packaging/web/README.md. The release workflow's pdfcraft-web zip still serves self-hosting."
 
 [[feature]]
 id = "misc.performance-budgets"

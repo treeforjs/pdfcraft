@@ -305,6 +305,23 @@ mod tests {
         assert!(main.contains(r#"const APP_ID: &str = "ai.storyteller.pdfcraft""#), "APP_ID drifted from the bundle id");
     }
 
+    // The hosted web app (misc.web-deploy) publishes nothing until a maintainer sets the
+    // PDFCRAFT_WEB_DEPLOY variable, deploys only main, and builds the same site as the release zip.
+    #[test]
+    fn web_deploy_stays_off_until_enabled() {
+        let wf = std::fs::read_to_string(root().join(".github/workflows/web.yml")).expect("web.yml");
+        let code: String = wf.lines().filter(|l| !l.trim_start().starts_with('#')).collect::<Vec<_>>().join("\n");
+        let (build, deploy) = code.split_once("\n  deploy:").expect("a deploy job after the build job");
+        assert!(deploy.contains("vars.PDFCRAFT_WEB_DEPLOY == 'true'"), "deploy is gated on the variable");
+        assert!(deploy.contains("github.ref == 'refs/heads/main'"), "only main is published");
+        assert!(deploy.contains("actions/deploy-pages@"), "deploy job publishes with Pages");
+        assert!(!build.contains("pages: write") && !build.contains("deploy-pages"), "the build job can't publish");
+        let push_build = build.lines().find(|l| l.trim_start().starts_with("if:")).expect("build job condition");
+        assert!(push_build.contains("vars.PDFCRAFT_WEB_DEPLOY == 'true'"), "pushes don't build until turned on");
+        assert!(build.contains("packaging/web/package.sh"), "the site is the release zip's");
+        assert!(read("packaging/web/README.md").contains("PDFCRAFT_WEB_DEPLOY"), "hosting docs say how to turn it on");
+    }
+
     // Committed file with `<!-- -->` comments stripped, so a commented-out claim cannot pass.
     fn read(rel: &str) -> String {
         let text = std::fs::read_to_string(root().join(rel)).expect("committed file");

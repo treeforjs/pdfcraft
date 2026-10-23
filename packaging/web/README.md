@@ -67,6 +67,22 @@ location /pdfcraft/ {
 
 Local test: `python3 -m http.server 8765` inside the folder, then open http://localhost:8765/.
 
+## GitHub Pages
+
+`.github/workflows/web.yml` builds this same site from `main` (with the OCR models and the
+craft-fonts Japanese fonts) and publishes it at `https://treeforjs.github.io/pdfcraft/`. It is
+off until a maintainer turns it on, because publishing makes the build public:
+
+1. Settings → Pages → Source: **GitHub Actions**.
+2. Settings → Secrets and variables → Actions → Variables: add `PDFCRAFT_WEB_DEPLOY` = `true`.
+
+From then on every push to `main` deploys. Actions → Web app → Run workflow builds without
+publishing, which checks the web build on any branch; tick **deploy** to republish `main` by
+hand. Delete the variable to stop deploying; the last published version stays up until Pages is
+turned off. GitHub Pages serves `.wasm` as `application/wasm` and compresses it, sets its own
+caching (it ignores `_headers` and `.htaccess`), and serves over HTTPS, so nothing else needs
+configuring.
+
 ## Embedding in a page (iframe)
 
 ```html
