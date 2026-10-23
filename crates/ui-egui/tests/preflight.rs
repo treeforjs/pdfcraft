@@ -7,6 +7,7 @@ fn native_preflight_analyzes_closes_and_exports_without_editing() {
     let bytes = Session::new().create_from_text("Synthetic", "A structural preflight test").unwrap().to_vec();
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
+        app.run_inline = true;
         app.set_option("language", "en").unwrap();
         app.open_bytes("synthetic.pdf", None, bytes.clone()).unwrap();
         app
@@ -40,6 +41,7 @@ fn native_pdfa_empty_result_does_not_claim_full_conformance() {
     let bytes = Session::new().create_blank(200.0, 200.0, 1).unwrap().to_vec();
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
+        app.run_inline = true;
         app.set_option("language", "en").unwrap();
         app.open_bytes("blank.pdf", None, bytes.clone()).unwrap();
         app
@@ -63,6 +65,7 @@ fn native_selected_fix_rejects_stale_results_then_supports_undo() {
     let bytes = pdfcraft_cos::write_full(&cos, &Default::default()).unwrap();
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
+        app.run_inline = true;
         app.set_option("language", "en").unwrap();
         app.open_bytes("actions.pdf", None, bytes.clone()).unwrap();
         app
@@ -97,6 +100,7 @@ fn native_selected_fix_rejects_stale_results_then_supports_undo() {
 #[test]
 fn failed_analysis_does_not_export_an_earlier_result() {
     let mut app = PdfCraftApp::new();
+    app.run_inline = true;
     let bytes = Session::new().create_blank(200.0, 200.0, 1).unwrap().to_vec();
     app.open_bytes("blank.pdf", None, bytes).unwrap();
     assert!(app.preflight_analyze());
