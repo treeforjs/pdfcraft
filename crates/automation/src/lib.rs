@@ -30,6 +30,7 @@ mod forms;
 mod ink_manager;
 mod js_debug;
 mod links;
+mod locale;
 mod make_accessible;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -783,6 +784,9 @@ impl Automation {
             "recovery_restore" => self.recovery_restore(&a)?,
             "recovery_discard" => self.recovery_discard(&a)?,
             "prefs_set" => self.prefs_set(&a)?,
+            "ui_language_get" => self.ui_language_get()?,
+            "ui_language_set" => self.ui_language_set(&a)?,
+            "locale_format" => self.locale_format(&a)?,
             "color_settings_get" => self.color_settings_get(&a)?,
             "color_settings_set" => self.color_settings_set(&a)?,
             "color_profiles_list" => self.color_profiles_list(&a)?,

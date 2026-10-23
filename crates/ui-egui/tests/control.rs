@@ -139,16 +139,35 @@ fn language_switch_preserves_document_and_command_ids() {
     h.state_mut().session.apply(doc, pdfcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
     let documents = ok(&mut h, &c, "ui.state", json!({}))["documents"].clone();
     assert_eq!(documents[0]["dirty"], true);
-    let commands = ok(&mut h, &c, "ui.commands", json!({}));
+    // Ids, English labels, menus and states stay the same; only the *_localized fields change.
+    let stable = |v: Value| -> Vec<Value> {
+        v["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| json!({ "id": c["id"], "label": c["label"], "menu": c["menu"], "enabled": c["enabled"], "shortcut": c["shortcut"] }))
+            .collect()
+    };
+    let localized = |v: &Value, id: &str| -> (String, Value) {
+        let c = v["commands"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap().clone();
+        (c["label_localized"].as_str().unwrap().to_string(), c["menu_localized"].clone())
+    };
+    let commands = stable(ok(&mut h, &c, "ui.commands", json!({})));
     for code in ["ja", "zh-hans", "fr", "de", "uk", "en"] {
         ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": code }));
         h.run_steps(2);
         let state = ok(&mut h, &c, "ui.state", json!({}));
         assert_eq!(state["language"], code);
+        assert_eq!(state["interface_language"]["code"], code);
+        assert_eq!(state["interface_language"]["direction"], "ltr");
         assert_eq!(state["documents"], documents);
-        assert_eq!(ok(&mut h, &c, "ui.commands", json!({})), commands);
+        let listed = ok(&mut h, &c, "ui.commands", json!({}));
+        assert_eq!(stable(listed.clone()), commands);
 
         let lang = i18n::Lang::from_code(code).unwrap();
+        let (label, menu) = localized(&listed, "app.preferences");
+        assert_eq!(label, i18n::tr_id(lang, "app.preferences", "Preferences…"));
+        assert_eq!(menu, json!(i18n::tr(lang, "Edit")));
         h.get_by_label(i18n::tr(lang, "Menu")).click();
         h.run_steps(2);
         h.get_by_label(&format!("{} ⏵", i18n::tr(lang, "File"))).hover();
@@ -160,6 +179,16 @@ fn language_switch_preserves_document_and_command_ids() {
     }
     let error = call(&mut h, &c, "ui.set", json!({ "key": "language", "value": "xx" })).unwrap_err();
     assert!(error.contains("auto, en, ja"), "{error}");
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "en");
+    // Interface language… opens Preferences on the page with the language picker.
+    ok(&mut h, &c, "ui.set", json!({ "key": "preferences-page", "value": "security" }));
+    ok(&mut h, &c, "ui.command", json!({ "id": "app.language" }));
+    h.run_steps(2);
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["dialog"], "Preferences");
+    h.get_by_label("Interface language");
+    for hostile in ["", "x".repeat(10_000).as_str(), "de-AT", "../ja"] {
+        assert!(call(&mut h, &c, "ui.set", json!({ "key": "pref.general.language", "value": hostile })).is_err(), "{hostile:?}");
+    }
     assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "en");
 }
 

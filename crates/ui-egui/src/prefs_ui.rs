@@ -550,12 +550,14 @@ fn choice(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static st
 fn row(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static str) {
     match key {
         "general.language" => setting(ui, t, key, None, |ui, label| {
-            let selected = crate::i18n::Lang::from_code(&app.language).map_or(tl!("Auto"), crate::i18n::Lang::name);
+            // Auto names the system language it follows, so the choice is never a guess.
+            let auto = crate::i18n::fmt(tl!("Auto ({language})"), &[("language", crate::i18n::system_lang().name())]);
+            let selected = crate::i18n::Lang::from_code(&app.language).map_or(auto.as_str(), |l| l.name());
             let before = app.language.clone();
             egui::ComboBox::from_id_salt("interface-language")
                 .selected_text(selected)
                 .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), tl!("Auto")).clicked() {
+                    if ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), auto.as_str()).clicked() {
                         ui.close();
                     }
                     for language in crate::i18n::Lang::all() {

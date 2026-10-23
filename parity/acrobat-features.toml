@@ -9965,15 +9965,28 @@ notes = ""
 
 [[feature]]
 id = "misc.localization"
-title = "Localization (Fluent catalogs)"
+title = "Localization (15 interface languages, TSV catalogs)"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.language", "app.preferences"]
+tools = ["ui_language_get", "ui_language_set", "locale_format", "prefs_get", "prefs_set"]
+evidence = [
+  "crates/ui-egui/src/i18n/mod.rs::every_catalog_is_complete",
+  "crates/ui-egui/src/i18n/mod.rs::formats_follow_the_interface_language",
+  "crates/ui-egui/src/i18n/mod.rs::registry_matches_the_engine_locales",
+  "crates/ui-egui/src/i18n/mod.rs::bundled_catalogs_are_consistent",
+  "crates/ui-egui/src/i18n/mod.rs::formatting_reorders_parameters_without_reinterpreting_user_text",
+  "crates/engine/src/locale.rs::numbers_follow_each_language",
+  "crates/engine/src/locale.rs::dates_follow_each_language",
+  "crates/engine/src/locale.rs::plural_rules",
+  "crates/engine/src/locale.rs::hostile_numbers_never_panic",
+  "crates/engine/src/locale.rs::tags_resolve_to_languages",
+  "crates/automation/tests/prefs.rs::interface_language_through_tools",
+  "crates/ui-egui/tests/control.rs::language_switch_preserves_document_and_command_ids",
+]
+notes = "Title updated from \"Fluent catalogs\": PdfCraft keeps the PhotoCraft-compatible system (English source strings as keys through tl!/tl_ctx!/trn, one TSV catalog per language in crates/ui-egui/src/i18n, @id command keys, @plural forms, contexts) instead of Fluent; nothing in AGENTS.md or docs asks for Fluent. English plus 14 catalogs (ja, zh-hans, zh-hant, cs, pt-br, de, es, fr, ru, bg, te, hu, uk, it). Edit → Preferences → General → Interface language (also the app.language command) switches the whole UI on the same frame and is remembered; Auto (the default, shown as Auto (language)) follows LC_ALL/LC_MESSAGES/LANG, the macOS preferred languages or the Windows display languages. pdfcraft_engine::locale holds the CLDR plural rules (one/few/many/other), number formatting (decimal and group separators, Indian grouping for Telugu, minimum grouping digits for Spanish and Bulgarian) and short numeric dates per language; counts in plural messages, file sizes, relative dates in Combine files and comment dates in Comment properties use them. Placeholders are named ({name}) so translations reorder them. Coverage check every_catalog_is_complete fails on any parse error (duplicate keys, placeholder, ellipsis or plural-form mismatches), on a missing command, All tools label, tl!/tl_ctx! literal or plural message in any catalog, and on English text left in a translation; it found 3 missing Spanish, 28 Telugu and 31 Traditional Chinese strings, now translated (no duplicate keys were present on this branch). The control channel's ui.commands adds label_localized and menu_localized and ui.state interface_language; headless tools and the CLI keep English labels and ids, since agents script against them, and translated text never reaches documents. Gaps: no right-to-left interface language is offered (Arabic or Hebrew would need the mirrored layout of misc.rtl-ui first; the registry test refuses an RTL language until then); dates in the comments list and other engine-formatted text stay ISO; times are 24-hour everywhere; error details from the engine and the OS stay English inside translated frames."
 
 [[feature]]
 id = "misc.rtl-ui"

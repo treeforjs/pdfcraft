@@ -2029,7 +2029,6 @@
 	yesterday	tegnap
 	{k} of {n}	{k} / {n}
 	{name} can't be combined: {why}	{name} nem egyesíthető: {why}
-	{n} days ago	{n} napja
 	{n} files	{n} fájl
 	{n} files need attention	{n} fájl figyelmet kér
 	{n} selected	{n} kijelölve
@@ -2534,6 +2533,14 @@ compare-page	Moved	Áthelyezve
 	The key is on the smart card or token, and the signature is made there.	A kulcs az intelligens kártyán vagy a tokenen van, és az aláírás ott készül.
 	Choose a slot with a card or token.	Válasszon egy kártyát vagy tokent tartalmazó foglalatot.
 	Unlock the token again.	Oldja fel újra a tokent.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Felület nyelve…
+	Auto ({language})	Automatikus ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} bájt|{n} bájt
+@plural	{n} day ago|{n} days ago	{n} napja|{n} napja
 	Downloading text recognition models… {r} of {t} MB	Szövegfelismerő modellek letöltése… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	A szövegfelismerő modellek (12 MB) az első szövegfelismeréskor töltődnek le erről a webhelyről, és utána ebben a böngészőben maradnak.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	a szövegfelismerő modellek még nincsenek letöltve ebbe a böngészőbe; futtassa a Szöveg felismerése parancsot a letöltésükhöz

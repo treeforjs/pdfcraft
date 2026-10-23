@@ -1633,7 +1633,6 @@
 	? of {n}	? di {n}
 	Added more than once	Aggiunto più volte
 	yesterday	ieri
-	{n} days ago	{n} giorni fa
 	No pages selected	Nessuna pagina selezionata
 	Password-protected	Protetto da password
 	Its security settings don't allow copying pages	Le sue impostazioni di sicurezza non consentono di copiare le pagine
@@ -2545,6 +2544,14 @@ compare-page	Moved	Spostata
 	The key is on the smart card or token, and the signature is made there.	La chiave è sulla smart card o sul token, e la firma viene creata lì.
 	Choose a slot with a card or token.	Scegli uno slot con una carta o un token.
 	Unlock the token again.	Sblocca di nuovo il token.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Lingua dell'interfaccia…
+	Auto ({language})	Auto ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} byte|{n} byte
+@plural	{n} day ago|{n} days ago	{n} giorno fa|{n} giorni fa
 	Downloading text recognition models… {r} of {t} MB	Download dei modelli di riconoscimento del testo… {r} di {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	I modelli di riconoscimento del testo (12 MB) vengono scaricati da questo sito la prima volta che riconosci del testo e poi conservati in questo browser.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	i modelli di riconoscimento del testo non sono ancora stati scaricati in questo browser; esegui Riconosci testo per scaricarli

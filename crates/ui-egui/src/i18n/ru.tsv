@@ -1630,7 +1630,6 @@
 	? of {n}	? из {n}
 	Added more than once	Добавлено более одного раза
 	yesterday	вчера
-	{n} days ago	{n} дней назад
 	No pages selected	Страницы не выбраны
 	Password-protected	Защищён паролем
 	Its security settings don't allow copying pages	Его настройки безопасности не разрешают копировать страницы
@@ -2449,6 +2448,14 @@ compare-page	Moved	Перемещена
 	The key is on the smart card or token, and the signature is made there.	Ключ находится на смарт-карте или токене, и подпись создаётся там.
 	Choose a slot with a card or token.	Выберите слот с картой или токеном.
 	Unlock the token again.	Разблокируйте токен снова.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Язык интерфейса…
+	Auto ({language})	Авто ({language})
+	{n} KB	{n} КБ
+	{n} MB	{n} МБ
+@plural	{n} byte|{n} bytes	{n} байт|{n} байта|{n} байт
+@plural	{n} day ago|{n} days ago	{n} день назад|{n} дня назад|{n} дней назад
 	Downloading text recognition models… {r} of {t} MB	Загрузка моделей распознавания текста… {r} из {t} МБ
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Модели распознавания текста (12 МБ) загружаются с этого сайта при первом распознавании текста и затем хранятся в этом браузере.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	модели распознавания текста ещё не загружены в этот браузер; запустите «Распознать текст», чтобы загрузить их

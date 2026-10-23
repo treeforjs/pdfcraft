@@ -29,6 +29,7 @@ pub mod export_ocr;
 pub mod js;
 pub mod js_debug;
 pub mod links;
+pub mod locale;
 pub mod ocr;
 pub mod optimizer;
 pub mod os_trust;

@@ -895,7 +895,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "prefs_get",
             "Read preferences",
-            "Preferences by key, the same ones the desktop app's Preferences window shows: documents.autosave_minutes, documents.recent_files, forms.highlight_color, forms.required_color, forms.date_format, identity.name/organization/unit/email, signatures.reason/location, security.javascript, security.internet_access, security.unlisted_sites, accessibility.text_scale/reduce_motion/high_contrast and color.rgb/cmyk/gray/intent/black_point_compensation/untagged/overprint_preview. Without key returns values (all, or one category: general, documents, commenting, forms, identity, signatures, security, accessibility, color); with key its value. schema adds, per key, its category, type (boolean, integer, number, string, color), range or enum, default, description and applies: session keys change what other tools do (identity.name is the default author of new comments, signatures.reason/location the defaults of sign, the security and color keys the session's JavaScript, internet access and colour settings); app keys are kept for the desktop app (autosave, recent files, field highlight colours, accessibility, identity details for new digital IDs). The app's own window settings (theme, language, workspace, page display) are set through its control channel (ui.set pref.<key>). Read-only.",
+            "Preferences by key, the same ones the desktop app's Preferences window shows: general.language, documents.autosave_minutes, documents.recent_files, forms.highlight_color, forms.required_color, forms.date_format, identity.name/organization/unit/email, signatures.reason/location, security.javascript, security.internet_access, security.unlisted_sites, accessibility.text_scale/reduce_motion/high_contrast and color.rgb/cmyk/gray/intent/black_point_compensation/untagged/overprint_preview. Without key returns values (all, or one category: general, documents, commenting, forms, identity, signatures, security, accessibility, color); with key its value. schema adds, per key, its category, type (boolean, integer, number, string, color), range or enum, default, description and applies: session keys change what other tools do (identity.name is the default author of new comments, signatures.reason/location the defaults of sign, the security and color keys the session's JavaScript, internet access and colour settings); app keys are kept for the desktop app (autosave, recent files, field highlight colours, accessibility, identity details for new digital IDs). The app's own window settings (theme, workspace, page display) are set through its control channel (ui.set pref.<key>). Read-only.",
         )
         .ro()
         .with(schema(
@@ -917,6 +917,38 @@ pub fn tools() -> Vec<ToolDef> {
                 "value": { "description": "Its new value (with key)." },
                 "values": { "type": "object", "description": "Several preferences: key → value." },
                 "reset": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "true resets every preference; an array resets those keys." },
+            }),
+            &[],
+        )),
+        t(
+            "ui_language_get",
+            "Interface language",
+            "The interface language: preference (general.language: auto or a language code), language (the one in effect: for auto, the one the LC_ALL, LC_MESSAGES or LANG environment asks for, else English; the desktop app also asks macOS and Windows), system (what auto resolves to, or null), and languages: every interface language with code, name, direction (ltr; no right-to-left language is offered), plural_categories, decimal_separator, group_separator, sample_number and sample_date. Translated text appears only in the desktop and web app; tools, the CLI and the control channel keep English labels and ids.",
+        )
+        .ro()
+        .with(schema(json!({}), &[])),
+        t(
+            "ui_language_set",
+            "Set the interface language",
+            "Edit ▸ Preferences ▸ General ▸ Interface language for this session: language is auto (follow the system), a language code from ui_language_get (any case) or a system locale tag that resolves to one (de_AT.UTF-8 → de, zh-TW → zh-hant, pt-PT → pt-br). Anything else is refused with the codes allowed. The desktop app reads the same preference (the control channel's ui.set pref.general.language switches the running app at once). Returns what ui_language_get returns.",
+        )
+        .cmd("app.language")
+        .with(schema(json!({ "language": { "type": "string", "minLength": 1, "maxLength": 64 } }), &["language"])),
+        t(
+            "locale_format",
+            "Format for a language",
+            "Write values the way the interface shows them in a language (default: the one in effect, ui_language_get): number (with decimals fraction digits, 0 to 10, default 2) as decimal, integer as whole number with digit grouping, date (YYYY-MM-DD) as the short numeric date, pdf_date (D:YYYYMMDDHHmm…) as date and time, count as its plural category (one, few, many, other) and form index. Give at least one value. Returns language and one field per value given.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "language": { "type": "string", "description": "A language code or locale tag (default: the interface language in effect)." },
+                "number": { "type": "number" },
+                "decimals": { "type": "integer", "minimum": 0, "maximum": 10 },
+                "integer": { "type": "integer" },
+                "date": { "type": "string", "description": "YYYY-MM-DD." },
+                "pdf_date": { "type": "string", "description": "A PDF date string such as D:20261008140500Z." },
+                "count": { "type": "integer", "minimum": 0 },
             }),
             &[],
         )),

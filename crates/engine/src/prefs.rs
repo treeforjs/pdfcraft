@@ -65,6 +65,8 @@ pub struct Preferences {
     pub reduce_motion: bool,
     /// Accessibility: stronger text and borders in every theme.
     pub high_contrast: bool,
+    /// Interface language: [`crate::locale::AUTO`] (follow the system) or a language code.
+    pub language: String,
 }
 
 impl Default for Preferences {
@@ -80,6 +82,7 @@ impl Default for Preferences {
             text_scale: 1.0,
             reduce_motion: false,
             high_contrast: false,
+            language: crate::locale::AUTO.to_string(),
         }
     }
 }
@@ -128,6 +131,14 @@ const TEXT: Kind = Kind::Text { max_chars: MAX_TEXT_CHARS };
 
 /// Every preference the session knows, in Preferences-window order.
 pub const SCHEMA: &[Spec] = &[
+    spec(
+        "general.language",
+        "general",
+        Kind::Choice(&crate::locale::LANGUAGE_PREFS),
+        "app",
+        false,
+        "Interface language: auto (follow the system language; the default) or en, ja, zh-hans, zh-hant, cs, pt-br, de, es, fr, ru, bg, te, hu, uk or it. Also sets how numbers, dates and plurals are written (ui_language_get).",
+    ),
     spec(
         "documents.autosave_minutes",
         "documents",
@@ -400,6 +411,7 @@ impl Session {
         let p = &self.prefs;
         let c = self.color_management().settings();
         Some(match key {
+            "general.language" => json!(p.language),
             "documents.autosave_minutes" => json!(p.autosave_minutes),
             "documents.recent_files" => json!(p.recent_files),
             "forms.highlight_color" => json!(color_hex(p.field_highlight)),
@@ -466,6 +478,7 @@ impl Session {
         let color = || parse_color(v).map(|(c, _)| c).unwrap_or([0, 0, 0]);
         let p = &mut self.prefs;
         match key {
+            "general.language" => p.language = text(),
             "documents.autosave_minutes" => p.autosave_minutes = int(),
             "documents.recent_files" => p.recent_files = int(),
             "forms.highlight_color" => p.field_highlight = color(),

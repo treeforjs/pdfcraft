@@ -2031,7 +2031,6 @@ action wizard	Start	ప్రారంభించు
 	? of {n}	{n}లో ?
 	Added more than once	ఒకటి కంటే ఎక్కువసార్లు జోడించబడింది
 	yesterday	నిన్న
-	{n} days ago	{n} రోజుల క్రితం
 	No pages selected	పేజీలు ఏవీ ఎంచుకోబడలేదు
 	Password-protected	పాస్‌వర్డ్‌తో రక్షించబడింది
 	Its security settings don't allow copying pages	దీని భద్రతా సెట్టింగ్‌లు పేజీలను కాపీ చేయడాన్ని అనుమతించవు
@@ -2467,6 +2466,44 @@ compare-page	Moved	తరలించబడింది
 	The key is on the smart card or token, and the signature is made there.	కీ స్మార్ట్ కార్డ్ లేదా టోకెన్‌పై ఉంది, సంతకం అక్కడే తయారవుతుంది.
 	Choose a slot with a card or token.	కార్డ్ లేదా టోకెన్ ఉన్న స్లాట్‌ను ఎంచుకోండి.
 	Unlock the token again.	టోకెన్‌ను మళ్లీ అన్‌లాక్ చేయండి.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	ఇంటర్‌ఫేస్ భాష…
+	Auto ({language})	ఆటో ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} బైట్|{n} బైట్‌లు
+@plural	{n} day ago|{n} days ago	{n} రోజు క్రితం|{n} రోజుల క్రితం
+
+# Home folders, Combine and page tools added since the last review.
+	Created a PDF from the first {n} files	మొదటి {n} ఫైల్‌ల నుండి PDF సృష్టించబడింది
+	Created a PDF from {n} files	{n} ఫైల్‌ల నుండి PDF సృష్టించబడింది
+	Created a PDF from {n} files; left out: {names}	{n} ఫైల్‌ల నుండి PDF సృష్టించబడింది; వదిలివేసినవి: {names}
+	Flatten Fill & Sign when saving	సేవ్ చేసేటప్పుడు నింపడం & సంతకాన్ని ఫ్లాటెన్ చేయి
+	Folders	ఫోల్డర్‌లు
+	Insert a file at the end	చివరలో ఒక ఫైల్‌ను చొప్పించు
+	Insert a file before page {label}	పేజీ {label} ముందు ఒక ఫైల్‌ను చొప్పించు
+	Larger pages	పెద్ద పేజీలు
+	Line ending	గీత చివర
+	Looking for PDFs…	PDFల కోసం వెతుకుతోంది…
+	No PDFs in this folder yet	ఈ ఫోల్డర్‌లో ఇంకా PDFలు లేవు
+	No changes to save	సేవ్ చేయడానికి మార్పులు లేవు
+	PDF, images and text	PDF, చిత్రాలు మరియు వచనం
+	Pin a folder to Home	ఒక ఫోల్డర్‌ను హోమ్‌కు పిన్ చేయి
+	Pin a folder to list its newest PDFs here, such as where your scanner or a synced cloud drive saves them.	ఒక ఫోల్డర్‌ను పిన్ చేస్తే దానిలోని కొత్త PDFలు ఇక్కడ కనిపిస్తాయి, ఉదాహరణకు మీ స్కానర్ లేదా సింక్ అయ్యే క్లౌడ్ డ్రైవ్ వాటిని సేవ్ చేసే చోటు.
+	Pin a folder…	ఒక ఫోల్డర్‌ను పిన్ చేయి…
+	Reset page size	పేజీ పరిమాణాన్ని రీసెట్ చేయి
+	Save pages	పేజీలను సేవ్ చేయి
+	Save these pages as one PDF	ఈ పేజీలను ఒకే PDFగా సేవ్ చేయి
+	Show less	తక్కువ చూపించు
+	Show {n} more	మరో {n} చూపించు
+	Smaller pages	చిన్న పేజీలు
+	Text, marks and signatures become part of the page. Other comments stay editable.	వచనం, గుర్తులు మరియు సంతకాలు పేజీలో భాగమవుతాయి. ఇతర వ్యాఖ్యలు సవరించదగినవిగానే ఉంటాయి.
+	The newest {n} of {total} PDFs	{total} PDFలలో కొత్తవి {n}
+	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	ప్రామాణిక ఫాంట్‌లు “{c}” ({code})ను గీయలేవు. ప్రస్తుతానికి పశ్చిమ యూరోపియన్ అక్షరాలను మాత్రమే వచనంగా జోడించవచ్చు.
+	This folder isn't available right now. It may have moved, or its drive or cloud sync is offline.	ఈ ఫోల్డర్ ప్రస్తుతం అందుబాటులో లేదు. అది తరలించబడి ఉండవచ్చు, లేదా దాని డ్రైవ్ లేదా క్లౌడ్ సింక్ ఆఫ్‌లైన్‌లో ఉండవచ్చు.
+	Unpin	పిన్ తీసివేయి
+	Unpin {folder}	{folder} పిన్ తీసివేయి
 	Downloading text recognition models… {r} of {t} MB	టెక్స్ట్ గుర్తింపు మోడళ్లను డౌన్‌లోడ్ చేస్తోంది… {t} MBలో {r} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	టెక్స్ట్ గుర్తింపు మోడళ్లు (12 MB) మీరు మొదటిసారి టెక్స్ట్‌ను గుర్తించినప్పుడు ఈ సైట్ నుండి డౌన్‌లోడ్ అవుతాయి, ఆ తర్వాత ఈ బ్రౌజర్‌లోనే ఉంటాయి.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	టెక్స్ట్ గుర్తింపు మోడళ్లు ఇంకా ఈ బ్రౌజర్‌లోకి డౌన్‌లోడ్ కాలేదు; వాటిని డౌన్‌లోడ్ చేయడానికి టెక్స్ట్‌ను గుర్తించు అమలు చేయండి

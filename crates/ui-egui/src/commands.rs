@@ -313,6 +313,12 @@ impl PdfCraftApp {
                 self.dialog = Some(Dialog::DocumentJs);
             }
             "app.preferences" => self.dialog = Some(Dialog::Preferences),
+            // Preferences ▸ General, where the interface language is chosen.
+            "app.language" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::General;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
+            }
             "ocr.recognize_batch" => self.ocr_files_dialog(),
             "edit.edit_text" => {
                 self.quick_tool = crate::QuickTool::EditText;

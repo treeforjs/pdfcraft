@@ -532,6 +532,12 @@ fn screenshot_png(image: &egui::ColorImage, region: Option<egui::Rect>, ppp: f32
     Ok(json!({ "png_base64": base64::engine::general_purpose::STANDARD.encode(out), "width": cw, "height": ch, "pixels_per_point": ppp }))
 }
 
+/// The language the interface is drawn in, for `ui.state`.
+fn interface_language(pref: &str) -> Value {
+    let l = crate::i18n::Lang::from_pref(pref);
+    json!({ "code": l.code(), "name": l.name(), "direction": if l.is_rtl() { "rtl" } else { "ltr" } })
+}
+
 impl Host for crate::PdfCraftApp {
     fn state(&self) -> Value {
         let active = self.active.and_then(|i| self.views.get(i));
@@ -607,6 +613,8 @@ impl Host for crate::PdfCraftApp {
             // Every preference by key (set with ui.set pref.<key>).
             "prefs": self.prefs_values(),
             "language": self.language,
+            // The language the interface is drawn in (the preference resolved: auto follows the system).
+            "interface_language": interface_language(&self.language),
             "notice": self.toast.as_ref().map(|t| t.0.clone()),
             "progress": self.progress_notice.as_ref().map(|p| json!({ "label": p.label, "fraction": p.fraction })),
             "password_prompt": self.password_prompt.is_some(),
@@ -631,9 +639,22 @@ impl Host for crate::PdfCraftApp {
     }
 
     fn commands(&self) -> Value {
+        // Labels in the language the interface is drawn in, even before the next frame sets it.
+        crate::i18n::set_current(crate::i18n::Lang::from_pref(&self.language));
         let list: Vec<Value> = pdfcraft_engine::commands::COMMANDS
             .iter()
-            .map(|c| json!({ "id": c.id, "label": c.label, "menu": c.menu, "enabled": self.command_enabled(c), "shortcut": c.shortcut.map(|s| s.label(cfg!(target_os = "macos"))) }))
+            .map(|c| {
+                json!({
+                    "id": c.id,
+                    "label": c.label,
+                    // What the person at the app reads: the label and menu in the interface language.
+                    "label_localized": crate::i18n::menu_label(c.id, c.label),
+                    "menu": c.menu,
+                    "menu_localized": c.menu.map(crate::i18n::t),
+                    "enabled": self.command_enabled(c),
+                    "shortcut": c.shortcut.map(|s| s.label(cfg!(target_os = "macos"))),
+                })
+            })
             .collect();
         json!({ "commands": list })
     }

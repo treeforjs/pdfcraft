@@ -2040,7 +2040,6 @@
 	yesterday	gestern
 	{k} of {n}	{k} von {n}
 	{name} can't be combined: {why}	{name} kann nicht kombiniert werden: {why}
-	{n} days ago	vor {n} Tagen
 	{n} files	{n} Dateien
 	{n} files need attention	{n} Dateien erfordern Aufmerksamkeit
 	{n} selected	{n} ausgewählt
@@ -2536,6 +2535,14 @@ compare-page	Moved	Verschoben
 	The key is on the smart card or token, and the signature is made there.	Der Schlüssel liegt auf der Smartcard oder dem Token, und die Signatur wird dort erstellt.
 	Choose a slot with a card or token.	Wählen Sie einen Steckplatz mit einer Karte oder einem Token.
 	Unlock the token again.	Entsperren Sie das Token erneut.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Sprache der Oberfläche…
+	Auto ({language})	Automatisch ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} Byte|{n} Byte
+@plural	{n} day ago|{n} days ago	vor {n} Tag|vor {n} Tagen
 	Downloading text recognition models… {r} of {t} MB	Modelle für die Texterkennung werden heruntergeladen… {r} von {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Die Modelle für die Texterkennung (12 MB) werden beim ersten Erkennen von Text von dieser Website heruntergeladen und dann in diesem Browser aufbewahrt.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	die Modelle für die Texterkennung wurden noch nicht in diesen Browser heruntergeladen; führe „Text erkennen“ aus, um sie herunterzuladen

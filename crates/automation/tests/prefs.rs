@@ -140,3 +140,59 @@ fn hostile_pref_arguments_are_refused_or_clamped() {
     assert_eq!(values["security.internet_access"], "custom");
     assert_eq!(values["color.gray"], "sgray");
 }
+
+/// `ui_language_get` / `ui_language_set` read and write `general.language` (the key the desktop
+/// app reads), `locale_format` writes numbers, dates and plurals per language, and hostile
+/// arguments are refused with what is allowed.
+#[test]
+fn interface_language_through_tools() {
+    let mut a = Automation::new();
+    let got = ok(&mut a, "ui_language_get", json!({}));
+    assert_eq!(got["preference"], "auto");
+    let languages = got["languages"].as_array().unwrap();
+    assert_eq!(languages.len(), 15);
+    assert!(languages.iter().all(|l| l["direction"] == "ltr"), "no right-to-left language is offered");
+    let de = languages.iter().find(|l| l["code"] == "de").unwrap();
+    assert_eq!(de["sample_number"], "1.234.567,5");
+    assert_eq!(de["sample_date"], "08.10.2026");
+
+    let set = ok(&mut a, "ui_language_set", json!({ "language": "de_AT.UTF-8" }));
+    assert_eq!((set["preference"].as_str(), set["language"].as_str(), set["name"].as_str()), (Some("de"), Some("de"), Some("Deutsch")));
+    assert_eq!(ok(&mut a, "prefs_get", json!({ "key": "general.language" }))["value"], "de");
+    // The interface language in effect is the default for locale_format.
+    assert_eq!(ok(&mut a, "locale_format", json!({ "number": 1234.5 }))["number"], "1.234,50");
+    ok(&mut a, "prefs_set", json!({ "key": "general.language", "value": "JA" }));
+    assert_eq!(ok(&mut a, "ui_language_get", json!({}))["language"], "ja");
+
+    let f = ok(
+        &mut a,
+        "locale_format",
+        json!({ "language": "ru", "number": -0.5, "decimals": 1, "integer": 1234567, "date": "2026-10-08", "pdf_date": "D:20261008140500Z", "count": 22 }),
+    );
+    assert_eq!(f["number"], "-0,5");
+    assert_eq!(f["integer"], "1\u{a0}234\u{a0}567");
+    assert_eq!(f["date"], "08.10.2026");
+    assert_eq!(f["pdf_date"], "08.10.2026 14:05");
+    assert_eq!(f["count"], json!({ "text": "22", "plural_category": "few", "plural_form": 1 }));
+    assert_eq!(ok(&mut a, "locale_format", json!({ "language": "te", "integer": 123456789 }))["integer"], "12,34,56,789");
+
+    for (tool, args) in [
+        ("ui_language_set", json!({ "language": "klingon" })),
+        ("ui_language_set", json!({ "language": "x".repeat(100_000) })),
+        ("ui_language_set", json!({ "language": 5 })),
+        ("ui_language_set", json!({})),
+        ("locale_format", json!({ "language": "en" })),
+        ("locale_format", json!({ "language": "auto", "integer": 1 })),
+        ("locale_format", json!({ "number": 1, "decimals": 11 })),
+        ("locale_format", json!({ "number": 1, "decimals": -1 })),
+        ("locale_format", json!({ "date": "2026-13-01" })),
+        ("locale_format", json!({ "date": "٢٠٢٦-١٠-٠٨" })),
+        ("locale_format", json!({ "pdf_date": "D:2026" })),
+        ("locale_format", json!({ "count": -1 })),
+        ("prefs_set", json!({ "key": "general.language", "value": "de-AT" })),
+    ] {
+        assert!(a.call(tool, &args).is_err(), "{tool} {args} should be refused");
+    }
+    // A refused change keeps the language.
+    assert_eq!(ok(&mut a, "ui_language_get", json!({}))["preference"], "ja");
+}

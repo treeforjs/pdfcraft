@@ -1939,7 +1939,6 @@
 	{k} of {n}	{k} de {n}
 	? of {n}	? de {n}
 	yesterday	ontem
-	{n} days ago	há {n} dias
 	{n} selected	{n} selecionados
 	Remove {n} files	Remover {n} arquivos
 	Select a file first	Selecione um arquivo primeiro
@@ -2537,6 +2536,14 @@ compare-page	Moved	Movida
 	The key is on the smart card or token, and the signature is made there.	A chave está no cartão inteligente ou token, e a assinatura é feita nele.
 	Choose a slot with a card or token.	Escolha um slot com um cartão ou token.
 	Unlock the token again.	Desbloqueie o token novamente.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Idioma da interface…
+	Auto ({language})	Automático ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} byte|{n} bytes
+@plural	{n} day ago|{n} days ago	há {n} dia|há {n} dias
 	Downloading text recognition models… {r} of {t} MB	Baixando os modelos de reconhecimento de texto… {r} de {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Os modelos de reconhecimento de texto (12 MB) são baixados deste site na primeira vez que você reconhece texto e depois ficam guardados neste navegador.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	os modelos de reconhecimento de texto ainda não foram baixados neste navegador; execute Reconhecer texto para baixá-los

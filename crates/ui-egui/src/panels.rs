@@ -1267,12 +1267,9 @@ fn fields(
     properties
 }
 
+/// A file size in the interface language (see [`crate::i18n::file_size`]).
 pub fn human_size(n: usize) -> String {
-    match n {
-        n if n >= 1 << 20 => format!("{:.1} MB", n as f64 / (1u64 << 20) as f64),
-        n if n >= 1 << 10 => format!("{:.1} KB", n as f64 / (1u64 << 10) as f64),
-        n => format!("{n} bytes"),
-    }
+    crate::i18n::file_size(u64::try_from(n).unwrap_or(u64::MAX))
 }
 
 #[cfg(test)]

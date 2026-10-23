@@ -325,7 +325,15 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                         PropsTab::Advanced => {
                             row(ui, "PDF version", i.pdf_version.clone());
                             row(ui, "Location", crate::bidi::visual(doc.path.as_deref().unwrap_or_default()).into_owned());
-                            row(ui, "File size", format!("{} ({} bytes)", human_size(i.file_size), i.file_size));
+                            row(
+                                ui,
+                                "File size",
+                                format!(
+                                    "{} ({})",
+                                    human_size(i.file_size),
+                                    crate::i18n::trn(crate::i18n::current(), u64::try_from(i.file_size).unwrap_or(u64::MAX), "{n} byte", "{n} bytes")
+                                ),
+                            );
                             let p = &i.pages[0];
                             row(ui, "Page size", format!("{:.2} × {:.2} in", p.width / 72.0, p.height / 72.0));
                             row(ui, "Number of pages", i.pages.len().to_string());

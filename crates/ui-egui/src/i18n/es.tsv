@@ -1632,7 +1632,6 @@
 	? of {n}	? de {n}
 	Added more than once	Añadido más de una vez
 	yesterday	ayer
-	{n} days ago	hace {n} días
 	No pages selected	No hay páginas seleccionadas
 	Password-protected	Protegido con contraseña
 	Its security settings don't allow copying pages	Su configuración de seguridad no permite copiar páginas
@@ -2452,6 +2451,19 @@ compare-page	Moved	Movida
 	The key is on the smart card or token, and the signature is made there.	La clave está en la tarjeta inteligente o el token, y la firma se crea allí.
 	Choose a slot with a card or token.	Elija una ranura con una tarjeta o un token.
 	Unlock the token again.	Vuelva a desbloquear el token.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Idioma de la interfaz…
+	Auto ({language})	Automático ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} byte|{n} bytes
+@plural	{n} day ago|{n} days ago	hace {n} día|hace {n} días
+
+# Strings added since the last review.
+	Flatten Fill & Sign when saving	Acoplar Rellenar y firmar al guardar
+	Line ending	Extremo de línea
+	Text, marks and signatures become part of the page. Other comments stay editable.	El texto, las marcas y las firmas pasan a formar parte de la página. Los demás comentarios siguen siendo editables.
 	Downloading text recognition models… {r} of {t} MB	Descargando los modelos de reconocimiento de texto… {r} de {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Los modelos de reconocimiento de texto (12 MB) se descargan de este sitio la primera vez que reconoces texto y luego se guardan en este navegador.
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	los modelos de reconocimiento de texto aún no se han descargado en este navegador; ejecuta Reconocer texto para descargarlos

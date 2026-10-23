@@ -29,9 +29,10 @@ use std::cell::Cell;
 use std::sync::OnceLock;
 
 use catalog::Catalog;
+use pdfcraft_engine::locale::{Locale, plural_cs, plural_east_slavic, plural_none, plural_one_other, plural_zero_one_other};
 
 /// The `language` preference value that follows the system locale.
-pub const AUTO: &str = "auto";
+pub const AUTO: &str = pdfcraft_engine::locale::AUTO;
 
 /// One supported UI language.
 pub struct LangInfo {
@@ -42,61 +43,10 @@ pub struct LangInfo {
     /// Catalog file contents (empty for the built-in English).
     pub source: &'static str,
     /// Plural form index for a count (English: 0 = one, 1 = other; Japanese: always 0). A catalog's
-    /// `@plural` entries list one form per index.
+    /// `@plural` entries list one form per index. The rules live in [`pdfcraft_engine::locale`],
+    /// with the language's number and date formats.
     pub plural: fn(u64) -> usize,
     catalog: OnceLock<Catalog>,
-}
-
-fn plural_one_other(n: u64) -> usize {
-    usize::from(n != 1)
-}
-
-fn plural_none(_: u64) -> usize {
-    0
-}
-
-/// Czech: 1 → one, 2–4 → few, everything else (0, 5+) → other.
-fn plural_cs(n: u64) -> usize {
-    match n {
-        1 => 0,
-        2..=4 => 1,
-        _ => 2,
-    }
-}
-
-/// Portuguese: 0 and 1 take the singular, everything else the plural.
-fn plural_pt(n: u64) -> usize {
-    usize::from(n > 1)
-}
-
-/// French (CLDR `fr`): 0 and 1 take the singular, everything else the plural.
-fn plural_fr(n: u64) -> usize {
-    usize::from(n > 1)
-}
-
-/// Russian: 1 (but not 11) is `one`, 2–4 (but not 12–14) `few`, everything else `many`.
-fn plural_russian(n: u64) -> usize {
-    match n % 100 {
-        11..=14 => 2,
-        _ => match n % 10 {
-            1 => 0,
-            2..=4 => 1,
-            _ => 2,
-        },
-    }
-}
-
-/// Ukrainian (CLDR `uk`, integer counts): one (1, 21), few (2–4, 22–24), many (0, 5–19).
-/// Counts ending in 11–14 always take many, regardless of the last digit.
-fn plural_ukrainian(n: u64) -> usize {
-    match n % 100 {
-        11..=14 => 2,
-        _ => match n % 10 {
-            1 => 0,
-            2..=4 => 1,
-            _ => 2,
-        },
-    }
 }
 
 /// The registry. English first: it is the fallback and the source language.
@@ -110,15 +60,21 @@ pub static LANGUAGES: [LangInfo; 15] = [
     LangInfo { code: "zh-hant", name: "繁體中文", source: include_str!("zh-hant.tsv"), plural: plural_none, catalog: OnceLock::new() },
     LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_cs, catalog: OnceLock::new() },
     // Brazilian Portuguese; `pt`, `pt-BR` and `pt-PT` locales all resolve here (see `candidates`).
-    LangInfo { code: "pt-br", name: "Português (Brasil)", source: include_str!("pt-br.tsv"), plural: plural_pt, catalog: OnceLock::new() },
+    LangInfo {
+        code: "pt-br",
+        name: "Português (Brasil)",
+        source: include_str!("pt-br.tsv"),
+        plural: plural_zero_one_other,
+        catalog: OnceLock::new(),
+    },
     // German (informal "du"); every `de-*` locale (`de-DE`, `de-AT`, `de-CH` ...) resolves here.
     LangInfo { code: "de", name: "Deutsch", source: include_str!("de.tsv"), plural: plural_one_other, catalog: OnceLock::new() },
     // Spanish (European vocabulary); every `es-*` locale (`es-ES`, `es-MX`, `es-419` ...) resolves here.
     LangInfo { code: "es", name: "Español", source: include_str!("es.tsv"), plural: plural_one_other, catalog: OnceLock::new() },
     // French; every `fr-*` locale (`fr-FR`, `fr-CA`, `fr-BE` ...) resolves here.
-    LangInfo { code: "fr", name: "Français", source: include_str!("fr.tsv"), plural: plural_fr, catalog: OnceLock::new() },
+    LangInfo { code: "fr", name: "Français", source: include_str!("fr.tsv"), plural: plural_zero_one_other, catalog: OnceLock::new() },
     // Russian; every `ru-*` locale (`ru-RU`, `ru-BY`, `ru-KZ` ...) resolves here.
-    LangInfo { code: "ru", name: "Русский", source: include_str!("ru.tsv"), plural: plural_russian, catalog: OnceLock::new() },
+    LangInfo { code: "ru", name: "Русский", source: include_str!("ru.tsv"), plural: plural_east_slavic, catalog: OnceLock::new() },
     // Bulgarian; every `bg-*` locale (`bg-BG`) resolves here.
     LangInfo { code: "bg", name: "Български", source: include_str!("bg.tsv"), plural: plural_one_other, catalog: OnceLock::new() },
     // Telugu; every `te-*` locale (`te-IN`) resolves here.
@@ -126,7 +82,7 @@ pub static LANGUAGES: [LangInfo; 15] = [
     // Hungarian; every `hu-*` locale (`hu-HU`) resolves here.
     LangInfo { code: "hu", name: "Magyar", source: include_str!("hu.tsv"), plural: plural_one_other, catalog: OnceLock::new() },
     // Ukrainian; every `uk-*` locale (`uk-UA`, `uk_UA.UTF-8`) resolves here.
-    LangInfo { code: "uk", name: "Українська", source: include_str!("uk.tsv"), plural: plural_ukrainian, catalog: OnceLock::new() },
+    LangInfo { code: "uk", name: "Українська", source: include_str!("uk.tsv"), plural: plural_east_slavic, catalog: OnceLock::new() },
     // Italian; every `it-*` locale (`it-IT`) resolves here.
     LangInfo { code: "it", name: "Italiano", source: include_str!("it.tsv"), plural: plural_one_other, catalog: OnceLock::new() },
 ];
@@ -196,47 +152,38 @@ impl Lang {
     fn catalog(self) -> &'static Catalog {
         self.0.catalog()
     }
+
+    /// The language's number, date and plural conventions (English's for a test language).
+    pub fn locale(self) -> &'static Locale {
+        pdfcraft_engine::locale::locale(self.0.code).unwrap_or_else(pdfcraft_engine::locale::english)
+    }
+
+    /// Written right to left. No language offered today is; one would need the interface
+    /// mirrored first (the registry test refuses one until then).
+    pub fn is_rtl(self) -> bool {
+        self.locale().rtl
+    }
 }
 
 /// The canonical `language` preference for user input: [`AUTO`] or a registered code (any case).
 /// `None` for anything else, so callers can keep the current setting.
 pub fn normalize_pref(pref: &str) -> Option<&'static str> {
-    if pref.eq_ignore_ascii_case(AUTO) {
+    if pref.trim().eq_ignore_ascii_case(AUTO) {
         return Some(AUTO);
     }
-    Lang::from_code(pref).map(Lang::code)
+    Lang::from_code(pref.trim()).map(Lang::code)
 }
 
-/// Candidate language codes for a locale tag, most specific first: `zh_TW.UTF-8` →
-/// `zh-tw`, `zh-hant`, `zh`.
+/// Candidate language codes for a locale tag, most specific first (see
+/// [`pdfcraft_engine::locale::candidates`]).
 fn candidates(tag: &str) -> Vec<String> {
-    let base = tag.split(['.', '@']).next().unwrap_or("").replace('_', "-").to_ascii_lowercase();
-    let parts: Vec<&str> = base.split('-').filter(|p| !p.is_empty()).collect();
-    let Some(&primary) = parts.first() else { return Vec::new() };
-    let mut out = Vec::new();
-    for n in (1..=parts.len()).rev() {
-        out.push(parts.get(..n).unwrap_or_default().join("-"));
-    }
-    if primary == "zh" && !parts.iter().any(|p| matches!(*p, "hans" | "hant")) {
-        // Chinese by region when no script is given.
-        let script = if parts.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")) { "zh-hant" } else { "zh-hans" };
-        out.insert(out.len().saturating_sub(1), script.to_string());
-    }
-    if primary == "pt" && !out.iter().any(|c| c == "pt-br") {
-        // The only Portuguese catalog is Brazilian; other regions use it rather than English.
-        out.insert(out.len().saturating_sub(1), "pt-br".to_string());
-    }
-    out
+    pdfcraft_engine::locale::candidates(tag)
 }
 
 /// The registered language for a locale tag such as `ja_JP.UTF-8`, `ja-JP`; `None` if the
 /// language isn't supported. `C`/`POSIX` mean English.
 pub fn lang_from_tag(tag: &str) -> Option<Lang> {
-    let cands = candidates(tag);
-    if matches!(cands.first().map(String::as_str), Some("c" | "posix")) {
-        return Some(Lang::EN);
-    }
-    cands.iter().find_map(|c| Lang::from_code(c))
+    pdfcraft_engine::locale::code_from_tag(tag).and_then(Lang::from_code)
 }
 
 /// The system language (cached). English when it can't be determined.
@@ -430,7 +377,40 @@ pub fn menu_label(id: &str, label: &str) -> String {
 pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
     let idx = (lang.0.plural)(n);
     let text = lang.catalog().plural(one, other, idx).unwrap_or(if n == 1 { one } else { other });
-    fmt(text, &[("n", &n.to_string())])
+    fmt(text, &[("n", &lang.locale().count(n))])
+}
+
+/// A decimal number in the current language: `1,234.5` / `1.234,5` / `1 234,5`.
+pub fn decimal(x: f64, decimals: usize) -> String {
+    current().locale().decimal(x, decimals)
+}
+
+/// A whole number in the current language, with its digit grouping.
+pub fn integer(n: i64) -> String {
+    current().locale().integer(n)
+}
+
+/// A short numeric date in the current language (`2026-10-08`, `08.10.2026`, `2026/10/08`).
+pub fn date(ymd: (i64, u32, u32)) -> String {
+    current().locale().date(ymd)
+}
+
+/// A PDF date (`D:20261008140500Z`) as the current language's date and time; text that isn't
+/// one comes back as written.
+pub fn pdf_date(s: &str) -> String {
+    pdfcraft_engine::locale::pdf_date(current().locale(), s).unwrap_or_else(|| s.to_string())
+}
+
+/// A file size in the current language: `12 bytes`, `3.4 KB`, `1,2 MB`.
+pub fn file_size(bytes: u64) -> String {
+    const KB: u64 = 1 << 10;
+    const MB: u64 = 1 << 20;
+    let lang = current();
+    match bytes {
+        n if n >= MB => fmt(t("{n} MB"), &[("n", &lang.locale().decimal(n as f64 / MB as f64, 1))]),
+        n if n >= KB => fmt(t("{n} KB"), &[("n", &lang.locale().decimal(n as f64 / KB as f64, 1))]),
+        n => trn(lang, n, "{n} byte", "{n} bytes"),
+    }
 }
 
 #[cfg(test)]
@@ -626,7 +606,7 @@ mod tests {
         assert_eq!(tr_id(l, "unknown", "Unknown"), "Unknown");
         assert_eq!(trn(l, 1, "{n} page", "{n} pages"), "One page: 1");
         assert_eq!(trn(l, 0, "{n} page", "{n} pages"), "Many pages: 0");
-        assert_eq!(trn(l, u64::MAX, "{n} page", "{n} pages"), format!("Many pages: {}", u64::MAX));
+        assert_eq!(trn(l, u64::MAX, "{n} page", "{n} pages"), format!("Many pages: {}", Lang::EN.locale().count(u64::MAX)));
     }
 
     #[test]
@@ -1129,6 +1109,7 @@ mod tests {
             "`{command}` {when}",
             "{0}: {1}",
             "{month} {y}",
+            "{n} MB",
         ];
         let (entries, _) = parse_entries(cs.0.source, cs.0.plural_forms());
         for e in &entries {
@@ -1945,8 +1926,9 @@ mod tests {
             (vec![0, 5, 10, 11, 12, 13, 14, 19, 20, 25, 100, 110, 111, 112, 114, 1000, u64::MAX], "сторінок", "полів"),
         ] {
             for n in counts {
-                assert_eq!(trn(uk, n, "{n} page", "{n} pages"), format!("{n} {page}"));
-                assert_eq!(trn(uk, n, "{n} field", "{n} fields"), format!("{n} {field}"));
+                let shown = uk.locale().count(n);
+                assert_eq!(trn(uk, n, "{n} page", "{n} pages"), format!("{shown} {page}"));
+                assert_eq!(trn(uk, n, "{n} field", "{n} fields"), format!("{shown} {field}"));
             }
         }
     }
@@ -2138,5 +2120,178 @@ mod tests {
         let interface: Vec<(&str, &str)> = Lang::all().map(|l| (l.code(), l.name())).collect();
         let dates: Vec<(&str, &str)> = pdfcraft_engine::dates::DATE_LANGUAGES.iter().map(|l| (l.code, l.name)).collect();
         assert_eq!(dates, interface);
+    }
+
+    /// The string literals after each `marker` in the UI source (test modules aside), unescaped:
+    /// `count` of them per call, separated by commas, e.g. `tl_ctx!("ctx", "Edit")`.
+    fn source_calls(marker: &str, count: usize) -> std::collections::BTreeSet<Vec<String>> {
+        fn literal(rest: &str) -> Option<(String, &str)> {
+            let rest = rest.trim_start().strip_prefix('"')?;
+            let mut escaped = false;
+            let end = rest.char_indices().find_map(|(i, c)| {
+                if c == '"' && !escaped {
+                    return Some(i);
+                }
+                escaped = c == '\\' && !escaped;
+                None
+            })?;
+            let (raw, tail) = rest.split_at(end);
+            let text: String = serde_json::from_str(&format!("\"{raw}\"")).ok()?;
+            Some((text, tail.get(1..)?))
+        }
+        let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        let mut found = std::collections::BTreeSet::new();
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(dir).expect("UI source directory") {
+                let path = entry.expect("UI source entry").path();
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|name| name != "i18n") {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if path.extension().is_none_or(|ext| ext != "rs") {
+                    continue;
+                }
+                let source = std::fs::read_to_string(path).expect("UI source file").replace("\r\n", "\n");
+                let source = source.split("#[cfg(test)]\nmod ").next().unwrap_or_default();
+                for (at, _) in source.match_indices(marker) {
+                    let mut rest = &source[at + marker.len()..];
+                    let mut args = Vec::new();
+                    // `trn(lang, n, "one", "other")`: skip the arguments before the literals.
+                    while args.len() < count {
+                        let Some(quote) = rest.find('"') else { break };
+                        // Literals after the first follow it directly; the arguments before the
+                        // first (`lang, n`) stay inside the call.
+                        let before = &rest[..quote];
+                        if (!args.is_empty() && !before.trim().is_empty()) || before.contains([';', '{', '}']) {
+                            break;
+                        }
+                        let Some((text, tail)) = literal(&rest[quote..]) else { break };
+                        args.push(text);
+                        rest = tail.trim_start().strip_prefix(',').unwrap_or(tail);
+                    }
+                    if args.len() == count {
+                        found.insert(args);
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Two lowercase English words in a row, outside placeholders and `code`: text left in English.
+    fn reads_as_english(text: &str) -> bool {
+        let mut plain = String::new();
+        let mut inside = None;
+        for c in text.chars() {
+            match (inside, c) {
+                (None, '{') => inside = Some('}'),
+                (None, '`') => inside = Some('`'),
+                (Some(end), c) if c == end => {
+                    inside = None;
+                    plain.push(' ');
+                }
+                (None, c) => plain.push(c),
+                _ => {}
+            }
+        }
+        let words: Vec<&str> = plain.split_whitespace().collect();
+        words.windows(2).any(|w| w.iter().all(|word| word.len() >= 2 && word.chars().all(|c| c.is_ascii_lowercase())))
+    }
+
+    /// The localization coverage check: every bundled catalog parses without errors (duplicate
+    /// keys, placeholder, ellipsis and plural-form mismatches are errors), and every language
+    /// translates every command, All tools label, `tl!` / `tl_ctx!` literal and plural message in
+    /// the UI source, without leaving English text in a translation.
+    #[test]
+    fn every_catalog_is_complete() {
+        let literals = ui_literals();
+        let contextual = source_calls("tl_ctx!(", 2);
+        let plurals = source_calls("trn(", 2);
+        assert!(literals.len() > 900 && contextual.len() > 5 && plurals.len() >= 4, "{} {} {plurals:?}", literals.len(), contextual.len());
+        let non_latin = ["ja", "zh-hans", "zh-hant", "ru", "uk", "bg", "te"];
+        let mut problems = Vec::new();
+        for lang in Lang::all().filter(|l| *l != Lang::EN) {
+            let code = lang.code();
+            let (entries, errors) = parse_entries(lang.0.source, lang.0.plural_forms());
+            problems.extend(errors.into_iter().map(|e| format!("{code}: {e}")));
+            for e in &entries {
+                if (e.translation == e.source || non_latin.contains(&code)) && reads_as_english(&e.translation) {
+                    problems.push(format!("{code}: untranslated {:?}", e.source));
+                }
+            }
+            let mut need = |ok: bool, what: &str, key: &str| {
+                if !ok {
+                    problems.push(format!("{code}: missing {what} {key:?}"));
+                }
+            };
+            for command in pdfcraft_engine::commands::COMMANDS {
+                need(has(lang, command.label) || lang.catalog().id(command.id).is_some(), "command", command.label);
+            }
+            for group in pdfcraft_engine::catalog::TOOL_GROUPS {
+                need(has(lang, group.label), "tool group", group.label);
+                for section in group.sections {
+                    need(has(lang, section.title), "tool section", section.title);
+                    for item in section.items {
+                        need(has(lang, item.label), "tool", item.label);
+                    }
+                }
+            }
+            for label in &literals {
+                need(has(lang, label), "literal", label);
+            }
+            for args in &contextual {
+                let [context, label] = args.as_slice() else { continue };
+                need(lang.catalog().contextual(context, label).is_some() || has(lang, label), "contextual", label);
+            }
+            for args in &plurals {
+                let [one, other] = args.as_slice() else { continue };
+                // One-form languages may write the message once; the others need every form.
+                let forms = lang.0.plural_forms();
+                need(lang.catalog().plural(one, other, forms.saturating_sub(1)).is_some(), "plural", &format!("{one}|{other}"));
+            }
+        }
+        assert!(problems.is_empty(), "{} localization problems:\n{}", problems.len(), problems.join("\n"));
+    }
+
+    /// The UI registry and the engine's locale table list the same languages with the same
+    /// plural rules, and none is right to left (a mirrored interface would have to come first).
+    #[test]
+    fn registry_matches_the_engine_locales() {
+        let codes: Vec<&str> = Lang::all().map(Lang::code).collect();
+        let locales: Vec<&str> = pdfcraft_engine::locale::LOCALES.iter().map(|l| l.code).collect();
+        assert_eq!(codes, locales);
+        for lang in Lang::all() {
+            let locale = lang.locale();
+            assert!((0..=1000).all(|n| (lang.0.plural)(n) == (locale.plural)(n)), "{}", lang.code());
+            assert_eq!(lang.0.plural_forms(), locale.plural_forms(), "{}", lang.code());
+            assert!(!lang.is_rtl(), "{}: an RTL language needs the mirrored layout first", lang.code());
+        }
+    }
+
+    /// Numbers, sizes, dates and counts follow the interface language; English keeps its text.
+    #[test]
+    fn formats_follow_the_interface_language() {
+        set_current(Lang::EN);
+        assert_eq!(
+            (file_size(1), file_size(512), file_size(1536), file_size(5 << 20)),
+            ("1 byte".into(), "512 bytes".into(), "1.5 KB".into(), "5.0 MB".into())
+        );
+        assert_eq!(date((2026, 10, 8)), "2026-10-08");
+        assert_eq!(pdf_date("D:20261008140500Z"), "2026-10-08 14:05");
+        assert_eq!(pdf_date("not a date"), "not a date");
+        set_current(Lang::from_code("de").unwrap());
+        assert_eq!(file_size(1536), "1,5 KB");
+        assert_eq!(decimal(1234.5, 1), "1.234,5");
+        assert_eq!(date((2026, 10, 8)), "08.10.2026");
+        set_current(Lang::from_code("ru").unwrap());
+        assert_eq!(trn(current(), 1234, "{n} page", "{n} pages"), "1\u{a0}234 страницы");
+        set_current(Lang::from_code("cs").unwrap());
+        assert_eq!(trn(current(), 3, "{n} day ago", "{n} days ago"), "před 3 dny");
+        assert_eq!(trn(current(), 5, "{n} day ago", "{n} days ago"), "před 5 dny");
+        set_current(Lang::EN);
+        assert_eq!(integer(-1_000_000), "-1,000,000");
+        assert_eq!(file_size(u64::MAX), "17592186044416.0 MB".replace("17592186044416", "17,592,186,044,416"));
     }
 }

@@ -1551,7 +1551,6 @@
 	? of {n}	?/{n}
 	Added more than once	重複新增
 	yesterday	昨天
-	{n} days ago	{n} 天前
 	No pages selected	未選取任何頁面
 	Password-protected	受密碼保護
 	Its security settings don't allow copying pages	其安全性設定不允許複製頁面
@@ -2422,6 +2421,47 @@ compare-page	Moved	已移動
 	The key is on the smart card or token, and the signature is made there.	金鑰位於智慧卡或權杖上，簽章也在那裡產生。
 	Choose a slot with a card or token.	請選擇插有卡片或權杖的插槽。
 	Unlock the token again.	請再次解除權杖鎖定。
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	介面語言…
+	Auto ({language})	自動 ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} 位元組
+@plural	{n} day ago|{n} days ago	{n} 天前
+@plural	{n} page|{n} pages	{n} 頁
+@plural	{n} field|{n} fields	{n} 個欄位
+
+# Strings added since the last review.
+	Change {what}	變更{what}
+	Create	建立
+	Create PDF from images	從影像建立 PDF
+	Cut and stack	裁切後堆疊
+	DPI sets the printed page size without resampling the image.	DPI 決定列印時的頁面大小，不會重新取樣影像。
+	Default page display	預設頁面顯示
+	Default workspace mode	預設工作區模式
+	Default zoom	預設縮放
+	Dynamic XFA form laid out from its template: {pages}, {fields}.	動態 XFA 表單已依範本排版：{pages}，{fields}。
+	Flatten Fill & Sign when saving	儲存時將填寫與簽署平面化
+	Line ending	線條端點
+	Open email app	開啟電子郵件應用程式
+	Open link	開啟連結
+	Open this web page?	要開啟這個網頁嗎？
+	Selected image files: {count}	已選取的影像檔案：{count}
+	Sign yourself	自行簽署
+	Text, marks and signatures become part of the page. Other comments stay editable.	文字、標記和簽名會成為頁面的一部分。其他註解仍可編輯。
+	This web address mixes letters from different alphabets, a common way to imitate another site's name.	這個網址混用了不同字母系統的字母，這是仿冒其他網站名稱的常見手法。
+	This web address uses letters from another alphabet, which can look like familiar ones.	這個網址使用了其他字母系統的字母，看起來可能和熟悉的字母很像。
+	Use 72 DPI (one point per pixel)	使用 72 DPI（每像素一點）
+	Use custom DPI	使用自訂 DPI
+	Use each image's embedded DPI; use 72 DPI when it is absent.	使用每張影像內嵌的 DPI；沒有時使用 72 DPI。
+	Use image resolution	使用影像解析度
+	Used when a PDF doesn't ask for a layout or zoom. Continuous scrolling never snaps between pages.	用於未指定版面或縮放的 PDF。連續捲動時不會在頁面之間停靠。
+	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	開啟 PDF 時使用。啟動時明確指定的模式或控制模式會在該工作階段中優先。
+	Write this email?	要撰寫這封電子郵件嗎？
+	XFA form: its fields and its XFA data are kept in step, so other viewers show what you fill in.	XFA 表單：欄位與 XFA 資料會保持同步，因此其他檢視器也會顯示您填寫的內容。
+	{who} in this document wants to open this address in your browser:	這份文件中的{who}要在瀏覽器中開啟這個網址：
+	{who} in this document wants to open your email app with this address:	這份文件中的{who}要以這個網址開啟您的電子郵件應用程式：
 	Downloading text recognition models… {r} of {t} MB	正在下載文字辨識模型… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	文字辨識模型（12 MB）會在你第一次辨識文字時從本站下載，之後保存在此瀏覽器中。
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	文字辨識模型尚未下載到此瀏覽器；請執行「辨識文字」來下載

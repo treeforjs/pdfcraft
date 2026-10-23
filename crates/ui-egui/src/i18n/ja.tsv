@@ -1638,7 +1638,6 @@
 	? of {n}	?/{n}
 	Added more than once	複数回追加されています
 	yesterday	昨日
-	{n} days ago	{n} 日前
 	No pages selected	ページが選択されていません
 	Password-protected	パスワードで保護されています
 	Its security settings don't allow copying pages	セキュリティ設定によりページのコピーが許可されていません
@@ -2536,6 +2535,14 @@ compare-page	Moved	移動
 	The key is on the smart card or token, and the signature is made there.	鍵はスマートカードまたはトークン上にあり、署名はそこで作成されます。
 	Choose a slot with a card or token.	カードまたはトークンが入ったスロットを選択してください。
 	Unlock the token again.	トークンのロックをもう一度解除してください。
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	表示言語…
+	Auto ({language})	自動 ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} バイト
+@plural	{n} day ago|{n} days ago	{n} 日前
 	Downloading text recognition models… {r} of {t} MB	テキスト認識モデルをダウンロード中… {r} / {t} MB
 	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	テキスト認識モデル（12 MB）は、初めてテキストを認識するときにこのサイトからダウンロードされ、その後はこのブラウザーに保存されます。
 	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	テキスト認識モデルがまだこのブラウザーにダウンロードされていません。「テキスト認識」を実行してダウンロードしてください
