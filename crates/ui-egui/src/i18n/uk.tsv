@@ -2751,3 +2751,51 @@ compare-page	Moved	Переміщена
 	Change reading order	Змінити порядок читання
 	Change tag properties	Змінити властивості тегу
 	Tag region	Позначити область
+	Add files to number	Додати файли для нумерації
+	Align and distribute	Вирівнювання й розподіл
+	Align bottom	Вирівняти за нижнім краєм
+	Align horizontal centers	Вирівняти центри по горизонталі
+	Align to the page	Вирівняти за сторінкою
+	Align top	Вирівняти за верхнім краєм
+	Align vertical centers	Вирівняти центри по вертикалі
+	Bates Number Options	Параметри нумерації Бейтса
+	Bates numbering… file {d} of {t}	Нумерація Бейтса… файл {d} з {t}
+	Bulleted list	Маркований список
+	Choose a destination	Виберіть призначення
+	Choose a folder for the numbered files	Виберіть теку для пронумерованих файлів
+	Custom view ({kind})	Власний вигляд ({kind})
+	Custom view ({zoom}%)	Власний вигляд ({zoom}%)
+	Distribute horizontally	Розподілити по горизонталі
+	Distribute vertically	Розподілити по вертикалі
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Змінені, додані й видалені текст і зображення оновлюють структуру документа з тегами в тому самому кроці скасування.
+	File name suffix	Суфікс назви файлу
+	Fit height	За висотою
+	Fit page	Сторінка повністю
+	Go to a named destination	Перейти до іменованого призначення
+	Go to the page as it is shown now: its position and zoom	Перейти до сторінки так, як її показано зараз: положення й масштаб
+	Horizontal offset	Зсув по горизонталі
+	Indent list	Збільшити відступ списку
+	Inherit zoom	Успадкувати масштаб
+	Keep structure tags when editing content	Зберігати теги структури під час редагування вмісту
+	Number of digits	Кількість цифр
+	Numbered list	Нумерований список
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	Пронумеровано файлів: {done} з {total}; не вдалося пронумерувати {name}: {e}
+	Numbered {n} more files, up to {last}	Пронумеровано ще файлів: {n}, до {last}
+	Outdent list	Зменшити відступ списку
+	Remove list	Прибрати список
+	Select three or more objects to distribute them	Виберіть три або більше об'єктів, щоб розподілити їх
+	Show when displaying on screen	Показувати на екрані
+	Show when printing	Показувати під час друку
+	Space after paragraphs	Інтервал після абзаців
+	Start number	Початковий номер
+	Suffix	Суфікс
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	Нумерація продовжується в цих файлах по черзі. Для кожного створюється пронумерована копія у вибраній теці; самі файли не змінюються.
+	This document has no named destinations.	У цьому документі немає іменованих призначень.
+	Use current view	Використати поточний вигляд
+	Vertical offset	Зсув по вертикалі
+	Bates numbering of other files couldn't start; try again	Не вдалося почати нумерацію Бейтса інших файлів; спробуйте ще раз
+	Bates numbering of other files is already running	Нумерація Бейтса інших файлів уже триває
+	That's as many files as one Bates numbering run takes	Більше файлів за одну нумерацію Бейтса обробити не можна
+	Numbering other files arrives on the web with folder pickers	Нумерація інших файлів з'явиться у веб-версії разом із вибором тек
+	Select objects with Edit objects first	Спершу виберіть об'єкти інструментом «Редагувати об'єкти»
+	Select a text box, or click into a paragraph, first	Спершу виберіть текстове поле або клацніть в абзаці

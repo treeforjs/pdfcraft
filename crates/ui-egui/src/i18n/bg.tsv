@@ -2690,3 +2690,52 @@ compare-page	Moved	Преместена
 	Change reading order	Промяна на реда на четене
 	Change tag properties	Промяна на свойствата на тага
 	Tag region	Тагване на област
+	Add files to number	Добавяне на файлове за номериране
+	Align and distribute	Подравняване и разпределяне
+	Align bottom	Подравняване долу
+	Align horizontal centers	Центриране хоризонтално
+	Align to the page	Подравняване към страницата
+	Align top	Подравняване горе
+	Align vertical centers	Центриране вертикално
+	Bates Number Options	Опции за номериране на Бейтс
+	Bates numbering… file {d} of {t}	Номериране на Бейтс… файл {d} от {t}
+	Bulleted list	Списък с водещи символи
+	Choose a destination	Изберете местоназначение
+	Choose a folder for the numbered files	Изберете папка за номерираните файлове
+	Custom view ({kind})	Персонализиран изглед ({kind})
+	Custom view ({zoom}%)	Персонализиран изглед ({zoom}%)
+	Distribute horizontally	Разпределяне хоризонтално
+	Distribute vertically	Разпределяне вертикално
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Редактираните, добавените и изтритите текст и изображения обновяват структурата на документ с етикети в същата стъпка за отмяна.
+	File name suffix	Наставка към името на файла
+	Fit height	Побиране по височина
+	Fit page	Цяла страница
+	Go to a named destination	Отиване до именувано местоназначение
+	Go to the page as it is shown now: its position and zoom	Отиване до страницата така, както е показана сега: позиция и мащаб
+	Horizontal offset	Хоризонтално отместване
+	Indent list	Увеличаване на отстъпа на списъка
+	Inherit zoom	Наследяване на мащаба
+	Keep structure tags when editing content	Запазване на структурните етикети при редактиране на съдържанието
+	Number of digits	Брой цифри
+	Numbered list	Номериран списък
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	Номерирани {done} от {total} файла; {name} не можа да се номерира: {e}
+	Numbered {n} more files, up to {last}	Номерирани още {n} файла, до {last}
+	Outdent list	Намаляване на отстъпа на списъка
+	Remove list	Премахване на списъка
+	Select three or more objects to distribute them	Изберете три или повече обекта, за да ги разпределите
+	Show when displaying on screen	Показване на екрана
+	Show when printing	Показване при печат
+	Space after paragraphs	Разстояние след абзаците
+	Start number	Начален номер
+	Suffix	Наставка
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	Номерата продължават в тези файлове по ред. Всеки получава номерирано копие в избрана от вас папка; самите файлове остават непроменени.
+	This document has no named destinations.	Този документ няма именувани местоназначения.
+	Use current view	Използване на текущия изглед
+	Vertical offset	Вертикално отместване
+	Bates numbering of other files couldn't start; try again	Номерирането на Бейтс на други файлове не можа да започне; опитайте отново
+	Bates numbering of other files is already running	Номерирането на Бейтс на други файлове вече тече
+	That's as many files as one Bates numbering run takes	Едно номериране на Бейтс не приема повече файлове
+	Numbering other files arrives on the web with folder pickers	Номерирането на други файлове идва в уеб версията заедно с избора на папки
+	Select objects with Edit objects first	Първо изберете обекти с „Редактиране на обекти“
+	Select a text box, or click into a paragraph, first	Първо изберете текстово поле или щракнете в абзац
+	That didn't work: an internal error stopped it ({m}).	Това не стана: спря го вътрешна грешка ({m}).

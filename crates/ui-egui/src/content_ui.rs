@@ -455,6 +455,101 @@ pub(crate) fn format_panel(ui: &mut egui::Ui, t: &Tokens, style: &AddedText) -> 
     (s != *style).then_some(s)
 }
 
+/// The list styles offered in the Format panel, by the label they draw.
+fn list_label(style: pdfcraft_engine::ListStyle) -> &'static str {
+    use pdfcraft_engine::{Bullet, ListStyle, Numbering};
+    match style {
+        ListStyle::Bullet(Bullet::Disc) => "•",
+        ListStyle::Bullet(Bullet::Dash) => "–",
+        ListStyle::Bullet(Bullet::Arrow) => "»",
+        ListStyle::Bullet(Bullet::Asterisk) => "*",
+        ListStyle::Bullet(Bullet::Dot) => "·",
+        ListStyle::Number(Numbering::Decimal) => "1.",
+        ListStyle::Number(Numbering::LowerAlpha) => "a.",
+        ListStyle::Number(Numbering::UpperAlpha) => "A.",
+        ListStyle::Number(Numbering::LowerRoman) => "i.",
+        ListStyle::Number(Numbering::UpperRoman) => "I.",
+    }
+}
+
+/// The List row of Format text for an added text box (`Some`) or a page paragraph being edited
+/// (`None`: it becomes a list box): bullets and numbers, the label style, and indent / outdent.
+/// Returns the change picked.
+pub(crate) fn list_panel(ui: &mut egui::Ui, t: &Tokens, text: Option<&AddedText>) -> Option<pdfcraft_engine::ListChange> {
+    use pdfcraft_engine::{Bullet, ListChange, ListStyle, Numbering};
+    let items = text.map(pdfcraft_engine::list_items).unwrap_or_default();
+    let first = items.iter().flatten().next().copied();
+    let in_list = first.is_some();
+    let all_bullets = in_list && items.iter().flatten().all(|i| !i.style.numbered());
+    let all_numbers = in_list && items.iter().flatten().all(|i| i.style.numbered());
+    let mut change = None;
+    ui.label(egui::RichText::new(tl!("List")).small().color(t.text_muted));
+    ui.horizontal(|ui| {
+        // Bullets and numbers toggle, as in a word processor.
+        if crate::icons::button(ui, "list", 26.0, all_bullets, tl!("Bulleted list")).clicked() {
+            change = Some(if all_bullets { ListChange::Remove } else { ListChange::Set { style: ListStyle::Bullet(Bullet::Disc), start: None } });
+        }
+        if crate::icons::button(ui, "list-ordered", 26.0, all_numbers, tl!("Numbered list")).clicked() {
+            change =
+                Some(if all_numbers { ListChange::Remove } else { ListChange::Set { style: ListStyle::Number(Numbering::Decimal), start: None } });
+        }
+        let shown = first.map_or(tl!("None"), |i| list_label(i.style));
+        egui::ComboBox::from_id_salt("list-style").selected_text(shown).width(56.0).show_ui(ui, |ui| {
+            if in_list && ui.selectable_label(false, tl!("None")).clicked() {
+                change = Some(ListChange::Remove);
+            }
+            for style in ListStyle::ALL {
+                let on = first.is_some_and(|i| i.style == style);
+                if ui.selectable_label(on, list_label(style)).clicked() && !on {
+                    change = Some(ListChange::Set { style, start: None });
+                }
+            }
+        });
+        ui.add_enabled_ui(in_list, |ui| {
+            if crate::icons::button(ui, "chevron-left", 26.0, false, tl!("Outdent list")).clicked() {
+                change = Some(ListChange::Indent(-1));
+            }
+            if crate::icons::button(ui, "chevron-right", 26.0, false, tl!("Indent list")).clicked() {
+                change = Some(ListChange::Indent(1));
+            }
+        });
+    });
+    change
+}
+
+/// Line spacing and the space after paragraphs of an added text box (or the style new text
+/// gets). Lists rather than drag values: every change is an undo step. Returns the changed box.
+pub(crate) fn spacing_panel(ui: &mut egui::Ui, t: &Tokens, style: &AddedText) -> Option<AddedText> {
+    let mut s = style.clone();
+    ui.horizontal(|ui| {
+        let l = ui.label(egui::RichText::new(tl!("Line spacing")).small().color(t.text_muted));
+        egui::ComboBox::from_id_salt("box-line-spacing")
+            .selected_text(format!("{:.2}×", s.line_spacing))
+            .width(70.0)
+            .show_ui(ui, |ui| {
+                for v in [1.0, 1.15, pdfcraft_engine::DEFAULT_LINE_SPACING, 1.5, 2.0, 2.5, 3.0] {
+                    ui.selectable_value(&mut s.line_spacing, v, format!("{v:.2}×"));
+                }
+            })
+            .response
+            .labelled_by(l.id);
+    });
+    ui.horizontal(|ui| {
+        let l = ui.label(egui::RichText::new(tl!("Space after paragraphs")).small().color(t.text_muted));
+        egui::ComboBox::from_id_salt("box-para-space")
+            .selected_text(format!("{} pt", s.para_space))
+            .width(70.0)
+            .show_ui(ui, |ui| {
+                for v in [0.0, 3.0, 6.0, 9.0, 12.0, 18.0, 24.0, 36.0] {
+                    ui.selectable_value(&mut s.para_space, v, format!("{v} pt"));
+                }
+            })
+            .response
+            .labelled_by(l.id);
+    });
+    (s != *style).then_some(s)
+}
+
 /// How to use the tools, under the Add content list.
 pub(crate) fn hint(ui: &mut egui::Ui, t: &Tokens) {
     ui.label(
@@ -468,6 +563,46 @@ pub(crate) fn hint(ui: &mut egui::Ui, t: &Tokens) {
 }
 
 impl crate::PdfCraftApp {
+    /// `edit.list.*`: the selected added text box's list (bullets and numbers toggle), or the
+    /// paragraph being edited made a list.
+    pub(crate) fn list_command(&mut self, id: &str) {
+        use pdfcraft_engine::{Bullet, ListChange, ListStyle, ListTarget, Numbering};
+        let Some((i, doc_id)) = self.active_ids() else { return };
+        let boxed = self.views.get(i).and_then(|v| v.content.selected).and_then(|(page, index)| {
+            let doc = self.session.get(doc_id)?;
+            match &doc.added.iter().filter(|a| a.page == page).nth(index)?.content {
+                AddedContent::Text(t) => Some((page, index, t.clone())),
+                AddedContent::Image(_) => None,
+            }
+        });
+        let editing = self.views.get(i).and_then(|v| v.line_editor.as_ref()).map(|e| (e.page, e.block));
+        let items = boxed.as_ref().map(|(_, _, t)| pdfcraft_engine::list_items(t)).unwrap_or_default();
+        let listed: Vec<_> = items.iter().flatten().collect();
+        let all = |numbered: bool| !listed.is_empty() && listed.iter().all(|it| it.style.numbered() == numbered);
+        let change = match id {
+            "edit.list.bulleted" if all(false) => ListChange::Remove,
+            "edit.list.bulleted" => ListChange::Set { style: ListStyle::Bullet(Bullet::Disc), start: None },
+            "edit.list.numbered" if all(true) => ListChange::Remove,
+            "edit.list.numbered" => ListChange::Set { style: ListStyle::Number(Numbering::Decimal), start: None },
+            "edit.list.remove" => ListChange::Remove,
+            "edit.list.indent" => ListChange::Indent(1),
+            _ => ListChange::Indent(-1),
+        };
+        match (boxed, editing) {
+            (Some((page, index, _)), _) => {
+                self.apply_edit(Edit::EditList { page, target: ListTarget::Added { index, paragraphs: None }, change });
+            }
+            (None, Some((page, block))) if matches!(change, ListChange::Set { .. }) => {
+                if self.apply_edit(Edit::EditList { page, target: ListTarget::Paragraphs { first: block, count: 1 }, change })
+                    && let Some(v) = self.views.get_mut(i)
+                {
+                    v.line_editor = None;
+                }
+            }
+            _ => self.notify_tr("Select a text box, or click into a paragraph, first"),
+        }
+    }
+
     /// Pick an image file for the active document, read it, and call `then` with its name and
     /// bytes: now when `save_override` answers (tests and automation never see a native dialog),
     /// otherwise on a later frame, and only if that document is still the active one.

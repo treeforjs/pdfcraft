@@ -2728,3 +2728,51 @@ compare-page	Moved	移動
 	Change reading order	読み上げ順序を変更
 	Change tag properties	タグのプロパティを変更
 	Tag region	領域にタグ付け
+	Add files to number	番号を付けるファイルを追加
+	Align and distribute	整列と分布
+	Align bottom	下揃え
+	Align horizontal centers	左右中央揃え
+	Align to the page	ページに揃える
+	Align top	上揃え
+	Align vertical centers	上下中央揃え
+	Bates Number Options	ベイツ番号のオプション
+	Bates numbering… file {d} of {t}	ベイツ番号を付けています… ファイル {d}/{t}
+	Bulleted list	箇条書き
+	Choose a destination	移動先を選択
+	Choose a folder for the numbered files	番号付きファイルの保存先フォルダーを選択
+	Custom view ({kind})	カスタム表示（{kind}）
+	Custom view ({zoom}%)	カスタム表示（{zoom}%）
+	Distribute horizontally	左右に均等配置
+	Distribute vertically	上下に均等配置
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	テキストや画像を編集・追加・削除すると、タグ付き文書の構造も同じ取り消し単位で更新されます。
+	File name suffix	ファイル名の接尾辞
+	Fit height	高さに合わせる
+	Fit page	ページ全体
+	Go to a named destination	名前付き移動先へ移動
+	Go to the page as it is shown now: its position and zoom	現在表示されている状態（位置と倍率）でページへ移動
+	Horizontal offset	横方向のオフセット
+	Indent list	リストのインデントを増やす
+	Inherit zoom	倍率を引き継ぐ
+	Keep structure tags when editing content	コンテンツの編集時に構造タグを保持
+	Number of digits	桁数
+	Numbered list	番号付きリスト
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} 件中 {done} 件に番号を付けました。{name} には番号を付けられませんでした: {e}
+	Numbered {n} more files, up to {last}	さらに {n} 件のファイルに {last} まで番号を付けました
+	Outdent list	リストのインデントを減らす
+	Remove list	リストを解除
+	Select three or more objects to distribute them	均等配置するには 3 つ以上のオブジェクトを選択してください
+	Show when displaying on screen	画面表示時に表示
+	Show when printing	印刷時に表示
+	Space after paragraphs	段落後の間隔
+	Start number	開始番号
+	Suffix	接尾辞
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	番号はこれらのファイルに順に続きます。各ファイルの番号付きコピーを選択したフォルダーに保存し、元のファイルは変更しません。
+	This document has no named destinations.	この文書には名前付き移動先がありません。
+	Use current view	現在の表示を使用
+	Vertical offset	縦方向のオフセット
+	Bates numbering of other files couldn't start; try again	他のファイルへのベイツ番号付けを開始できませんでした。もう一度お試しください
+	Bates numbering of other files is already running	他のファイルへのベイツ番号付けはすでに実行中です
+	That's as many files as one Bates numbering run takes	1 回のベイツ番号付けで扱えるファイル数の上限です
+	Numbering other files arrives on the web with folder pickers	他のファイルへの番号付けは、フォルダー選択とともに Web 版に追加予定です
+	Select objects with Edit objects first	先に「オブジェクトを編集」でオブジェクトを選択してください
+	Select a text box, or click into a paragraph, first	先にテキストボックスを選択するか、段落内をクリックしてください

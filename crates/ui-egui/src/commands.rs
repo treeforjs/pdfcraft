@@ -326,6 +326,8 @@ impl PdfCraftApp {
                 self.left_open = true;
                 self.notify_tr("Click text or an image to edit it");
             }
+            object if crate::object_ui::command_change(object).is_some() => self.object_command(object),
+            "edit.list.bulleted" | "edit.list.numbered" | "edit.list.remove" | "edit.list.indent" | "edit.list.outdent" => self.list_command(id),
             "edit.edit_object" => {
                 self.quick_tool = crate::QuickTool::EditObject;
                 self.left = crate::LeftPanel::Tool("edit");

@@ -71,7 +71,7 @@ pub mod marks {
 mod content_ui;
 mod link_ui;
 pub use create_ui::Clip;
-pub use link_ui::{LinkDraft, LinkKind};
+pub use link_ui::{LinkDraft, LinkKind, ViewFit};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
 pub use sign_ui::{DigitalIdEntry, PinField, SigProps, SigPropsTab, SignDraft, SignStep, TokenDraft, property_rows as signature_property_rows};
 pub use submit_ui::SubmitDraft;
@@ -538,6 +538,8 @@ pub struct PdfCraftApp {
     pub ocr_draft: ocr_ui::OcrDraft,
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
+    /// Bates numbering continued into other files, running in the background.
+    pub bates_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
     /// Background jobs (OCR, actions, listing pinned folders) run inline instead (tests).
     pub run_inline: bool,
     /// Action Wizard: the user's actions, the dialog state, the running action and (tests) the
@@ -838,6 +840,7 @@ impl PdfCraftApp {
             ocr_draft: ocr_ui::OcrDraft::default(),
             ocr_run: None,
             ocr_batch: None,
+            bates_batch: None,
             run_inline: false,
             custom_actions: Vec::new(),
             wizard: Default::default(),
@@ -2318,6 +2321,7 @@ impl eframe::App for PdfCraftApp {
         }
         self.poll_export();
         self.poll_ocr();
+        self.poll_bates();
         self.poll_signature_workflow();
         self.poll_submit();
         self.poll_compare();

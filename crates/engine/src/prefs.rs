@@ -155,6 +155,14 @@ pub const SCHEMA: &[Spec] = &[
         true,
         "How many recent files Home and File ▸ Open Recent list (default 12).",
     ),
+    spec(
+        "documents.keep_tags_on_edit",
+        "documents",
+        Kind::Bool,
+        "session",
+        true,
+        "Keep structure tags when editing content (default true): edited, added and deleted text and images update the document's tag tree in the same undo step (the edit_keep_tags tool switches it for the session only).",
+    ),
     spec("forms.highlight_color", "forms", Kind::Color, "app", true, "Fill and border colour of highlighted form fields (default #6E8EF5)."),
     spec("forms.required_color", "forms", Kind::Color, "app", true, "Border colour of highlighted required fields (default #E32222)."),
     spec(
@@ -414,6 +422,7 @@ impl Session {
             "general.language" => json!(p.language),
             "documents.autosave_minutes" => json!(p.autosave_minutes),
             "documents.recent_files" => json!(p.recent_files),
+            "documents.keep_tags_on_edit" => json!(self.keep_tags_on_edit()),
             "forms.highlight_color" => json!(color_hex(p.field_highlight)),
             "forms.required_color" => json!(color_hex(p.required_highlight)),
             "forms.date_format" => json!(self.date_format()),
@@ -494,6 +503,7 @@ impl Session {
             "accessibility.reduce_motion" => p.reduce_motion = flag(),
             "accessibility.high_contrast" => p.high_contrast = flag(),
             "security.javascript" => self.set_javascript(flag()),
+            "documents.keep_tags_on_edit" => self.set_keep_tags_on_edit(flag()),
             "security.internet_access" => {
                 let mut policy = self.url_policy().clone();
                 policy.mode = UrlMode::from_id(&text()).ok_or_else(|| wrong(key, "custom, allow-all or block-all"))?;

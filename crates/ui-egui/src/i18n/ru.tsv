@@ -2643,3 +2643,52 @@ compare-page	Moved	Перемещена
 	Change reading order	Изменить порядок чтения
 	Change tag properties	Изменить свойства тега
 	Tag region	Разметить область
+	Add files to number	Добавить файлы для нумерации
+	Align and distribute	Выравнивание и распределение
+	Align bottom	Выровнять по нижнему краю
+	Align horizontal centers	Выровнять центры по горизонтали
+	Align to the page	Выровнять по странице
+	Align top	Выровнять по верхнему краю
+	Align vertical centers	Выровнять центры по вертикали
+	Bates Number Options	Параметры нумерации Бейтса
+	Bates numbering… file {d} of {t}	Нумерация Бейтса… файл {d} из {t}
+	Bulleted list	Маркированный список
+	Choose a destination	Выберите назначение
+	Choose a folder for the numbered files	Выберите папку для пронумерованных файлов
+	Custom view ({kind})	Свой вид ({kind})
+	Custom view ({zoom}%)	Свой вид ({zoom}%)
+	Distribute horizontally	Распределить по горизонтали
+	Distribute vertically	Распределить по вертикали
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Изменённые, добавленные и удалённые текст и изображения обновляют структуру документа с тегами в том же шаге отмены.
+	File name suffix	Суффикс имени файла
+	Fit height	По высоте
+	Fit page	Страница целиком
+	Go to a named destination	Перейти к именованному назначению
+	Go to the page as it is shown now: its position and zoom	Перейти к странице так, как она показана сейчас: положение и масштаб
+	Horizontal offset	Смещение по горизонтали
+	Indent list	Увеличить отступ списка
+	Inherit zoom	Наследовать масштаб
+	Keep structure tags when editing content	Сохранять теги структуры при редактировании содержимого
+	Number of digits	Число цифр
+	Numbered list	Нумерованный список
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	Пронумеровано файлов: {done} из {total}; не удалось пронумеровать {name}: {e}
+	Numbered {n} more files, up to {last}	Пронумеровано ещё файлов: {n}, до {last}
+	Outdent list	Уменьшить отступ списка
+	Remove list	Убрать список
+	Select three or more objects to distribute them	Выберите три или более объекта, чтобы распределить их
+	Show when displaying on screen	Показывать на экране
+	Show when printing	Показывать при печати
+	Space after paragraphs	Интервал после абзацев
+	Start number	Начальный номер
+	Suffix	Суффикс
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	Нумерация продолжается в этих файлах по порядку. Для каждого создаётся пронумерованная копия в выбранной папке; сами файлы не изменяются.
+	This document has no named destinations.	В этом документе нет именованных назначений.
+	Use current view	Использовать текущий вид
+	Vertical offset	Смещение по вертикали
+	Bates numbering of other files couldn't start; try again	Не удалось начать нумерацию Бейтса других файлов; повторите попытку
+	Bates numbering of other files is already running	Нумерация Бейтса других файлов уже идёт
+	That's as many files as one Bates numbering run takes	Больше файлов за одну нумерацию Бейтса обработать нельзя
+	Numbering other files arrives on the web with folder pickers	Нумерация других файлов появится в веб-версии вместе с выбором папок
+	Select objects with Edit objects first	Сначала выберите объекты инструментом «Редактировать объекты»
+	Select a text box, or click into a paragraph, first	Сначала выберите текстовое поле или щёлкните в абзаце
+	That didn't work: an internal error stopped it ({m}).	Не получилось: помешала внутренняя ошибка ({m}).

@@ -3104,3 +3104,121 @@ fn hairlines_are_thickened_as_printed() {
     }
     assert!(matches!(fix_hairlines(&mut bad, &[3], &Hairlines::default()), Err(EditError::NoSuchPage(3))));
 }
+
+#[test]
+fn watermarks_move_scale_and_show_only_when_printing_or_on_screen() {
+    let mut doc = fixture();
+    // Moved 100 pt right and 50 pt down from the page centre (300, 400), fitted to a quarter of
+    // the diagonal: half the default size.
+    let wm = Watermark { text: "DRAFT".into(), rotation: 0.0, offset: [100.0, -50.0], scale: 0.25, ..Watermark::default() };
+    add_watermark(&mut doc, &[0], &wm, false).unwrap();
+    let s = streams(&doc, 0).join("\n");
+    assert!(s.contains("1 0 -0 1 400 350 cm") || s.contains("1 0 0 1 400 350 cm"), "{s}");
+    let half = Watermark { text: "DRAFT".into(), rotation: 0.0, ..Watermark::default() };
+    let mut other = fixture();
+    add_watermark(&mut other, &[0], &half, false).unwrap();
+    let size = |s: &str| s.split("/PCHelv ").nth(1).and_then(|r| r.split(' ').next()).and_then(|n| n.parse::<f64>().ok()).unwrap();
+    let (a, b) = (size(&s), size(&streams(&other, 0).join("\n")));
+    assert!((a * 2.0 - b).abs() < 0.01, "{a} {b}");
+    assert!(!s.contains("/OC "), "shown everywhere: no optional content");
+
+    // Print only: optional content that is off on screen and on in print.
+    let mut doc = fixture();
+    let print = Watermark { text: "COPY".into(), visibility: MarkVisibility::PrintOnly, ..Watermark::default() };
+    add_watermark(&mut doc, &[0, 1], &print, false).unwrap();
+    let doc = reopen(&doc);
+    let s = streams(&doc, 0).join("\n");
+    assert!(s.contains("/OC /PCWmPrint BDC") && s.contains("(COPY) Tj"), "{s}");
+    let root = doc.root().unwrap();
+    let cat = doc.get(root).as_dict().cloned().unwrap();
+    let props = doc.resolve(cat.get(b"OCProperties").unwrap()).as_dict().cloned().unwrap();
+    let ocgs = doc.resolve(props.get(b"OCGs").unwrap()).as_array().cloned().unwrap();
+    assert_eq!(ocgs.len(), 1, "one group however many pages");
+    let group = ocgs[0].as_ref().unwrap();
+    let g = doc.get(group).as_dict().cloned().unwrap();
+    let usage = doc.resolve(g.get(b"Usage").unwrap()).as_dict().cloned().unwrap();
+    let state = |k: &[u8], s: &[u8]| doc.resolve(usage.get(k).unwrap()).as_dict().unwrap().name(s).map(<[u8]>::to_vec);
+    assert_eq!((state(b"View", b"ViewState"), state(b"Print", b"PrintState")), (Some(b"OFF".to_vec()), Some(b"ON".to_vec())));
+    let d = doc.resolve(props.get(b"D").unwrap()).as_dict().cloned().unwrap();
+    assert!(doc.resolve(d.get(b"OFF").unwrap()).as_array().unwrap().contains(&Object::Ref(group)), "off on screen");
+    assert_eq!(doc.resolve(d.get(b"AS").unwrap()).as_array().unwrap().len(), 2, "view and print usage applied");
+    let page = &pdfcraft_model::pages(&doc)[1];
+    let res = doc.resolve(page.dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    assert_eq!(doc.resolve(res.get(b"Properties").unwrap()).as_dict().unwrap().get(b"PCWmPrint"), Some(&Object::Ref(group)));
+
+    // Screen only: dropped from the copy that is printed; the others stay.
+    let mut doc = doc;
+    let screen = Watermark { text: "PREVIEW".into(), visibility: MarkVisibility::ScreenOnly, ..Watermark::default() };
+    add_watermark(&mut doc, &[0], &screen, false).unwrap();
+    assert!(streams(&doc, 0).join("\n").contains("/OC /PCWmScreen BDC"));
+    let mut printed = doc.clone();
+    assert_eq!(without_screen_only_marks(&mut printed).unwrap(), 1);
+    let s = streams(&printed, 0).join("\n");
+    assert!(!s.contains("PREVIEW") && s.contains("COPY"), "{s}");
+    assert_eq!(without_screen_only_marks(&mut printed).unwrap(), 0);
+    // Watermark ▸ Remove takes both.
+    assert_eq!(remove_marks(&mut doc, &[0], MarkKind::Watermark).unwrap(), 2);
+    assert_eq!(MarkVisibility::from_flags(false, false).map_err(|_| ()), Err(()));
+    assert_eq!(MarkVisibility::from_flags(true, false), Ok(MarkVisibility::PrintOnly));
+}
+
+#[test]
+fn hostile_watermark_positions_and_scales_are_refused() {
+    for (offset, scale) in [
+        ([f64::NAN, 0.0], 0.5),
+        ([0.0, f64::INFINITY], 0.5),
+        ([1e12, 0.0], 0.5),
+        ([0.0, 0.0], 0.0),
+        ([0.0, 0.0], -1.0),
+        ([0.0, 0.0], 1.5),
+        ([0.0, 0.0], f64::NAN),
+    ] {
+        let mut doc = fixture();
+        let before = streams(&doc, 0);
+        let wm = Watermark { text: "X".into(), offset, scale, ..Watermark::default() };
+        assert!(matches!(add_watermark(&mut doc, &[0], &wm, false), Err(EditError::Invalid(_))), "{offset:?} {scale}");
+        assert_eq!(streams(&doc, 0), before);
+    }
+    // A broken /OCProperties (not a dictionary) is replaced, not trusted.
+    let mut doc = fixture();
+    let root = doc.root().unwrap();
+    doc.update_dict(root, |c| c.set(b"OCProperties".to_vec(), Object::Int(7))).unwrap();
+    let wm = Watermark { text: "X".into(), visibility: MarkVisibility::ScreenOnly, ..Watermark::default() };
+    add_watermark(&mut doc, &[0], &wm, false).unwrap();
+    assert!(streams(&doc, 0).join("").contains("/OC /PCWmScreen BDC"));
+}
+
+#[test]
+fn text_boxes_take_line_and_paragraph_spacing() {
+    let mut doc = fixture();
+    let plain = AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: "One\nTwo\nThree".into(), size: 10.0, ..AddedText::default() };
+    let spaced = AddedText { line_spacing: 2.0, para_space: 6.0, ..plain.clone() };
+    // Three one-line paragraphs: 3 × 10 × 2 pt plus two 6 pt gaps.
+    assert_eq!(added::text_rect(&spaced), [72.0, 700.0 - 72.0, 300.0, 700.0]);
+    assert_eq!(added::text_rect(&plain), [72.0, 700.0 - 3.0 * 10.0 * 1.2, 300.0, 700.0], "unchanged without spacing");
+    add_content(&mut doc, 0, &Content::Text(spaced.clone())).unwrap();
+    let s = streams(&doc, 0).join("\n");
+    // Baselines: 9.5 below the top, then 20 + 6 further for each paragraph.
+    for y in ["690.5", "664.5", "638.5"] {
+        assert!(s.contains(&format!("1 0 0 1 72 {y} Tm")), "{y}: {s}");
+    }
+    // Kept through save and reopen; a box without them reads back the defaults.
+    let reopened = reopen(&doc);
+    let Content::Text(t) = &list_added(&reopened)[0].content else { panic!() };
+    assert_eq!((t.line_spacing, t.para_space), (2.0, 6.0));
+    // A list keeps the spacing too.
+    let listed = lists::change_list(&spaced, None, &ListChange::Set { style: ListStyle::Bullet(Bullet::Disc), start: None }).unwrap();
+    assert_eq!(added::text_rect(&listed), added::text_rect(&spaced));
+    // Hostile values are refused and change nothing.
+    let mut doc = reopened;
+    for (k, p) in [(f64::NAN, 0.0), (0.1, 0.0), (9.0, 0.0), (1.2, -1.0), (1.2, f64::INFINITY), (1.2, 1e9)] {
+        let bad = AddedText { line_spacing: k, para_space: p, ..plain.clone() };
+        assert!(matches!(update_content(&mut doc, 0, 0, &Content::Text(bad)), Err(EditError::Invalid(_))), "{k} {p}");
+    }
+    let Content::Text(t) = &list_added(&doc)[0].content else { panic!() };
+    assert_eq!((t.line_spacing, t.para_space), (2.0, 6.0));
+    // An out-of-range value written into the file by hand reads back as the default.
+    let unusable = AddedText { line_spacing: 400.0, para_space: f64::NAN, ..plain };
+    assert_eq!(added::line_height(&unusable), 12.0);
+    assert_eq!(added::text_rect(&unusable)[1], 700.0 - 36.0);
+}

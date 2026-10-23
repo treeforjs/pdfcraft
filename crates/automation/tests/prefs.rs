@@ -196,3 +196,19 @@ fn interface_language_through_tools() {
     // A refused change keeps the language.
     assert_eq!(ok(&mut a, "ui_language_get", json!({}))["preference"], "ja");
 }
+
+#[test]
+fn keeping_tags_on_edit_is_a_preference() {
+    let mut a = Automation::new();
+    assert_eq!(ok(&mut a, "prefs_get", json!({ "key": "documents.keep_tags_on_edit" }))["value"], true);
+    ok(&mut a, "prefs_set", json!({ "key": "documents.keep_tags_on_edit", "value": false }));
+    assert_eq!(ok(&mut a, "edit_keep_tags", json!({})), json!({ "enabled": false }), "the tool sees the preference");
+    ok(&mut a, "edit_keep_tags", json!({ "enabled": true }));
+    assert_eq!(ok(&mut a, "prefs_get", json!({ "key": "documents.keep_tags_on_edit" }))["value"], true, "and the preference the tool");
+    for bad in [json!("maybe"), json!(1), json!(null), json!([true]), json!({ "on": true })] {
+        err(&mut a, "prefs_set", json!({ "key": "documents.keep_tags_on_edit", "value": bad }));
+    }
+    assert_eq!(ok(&mut a, "prefs_get", json!({ "key": "documents.keep_tags_on_edit" }))["value"], true);
+    ok(&mut a, "prefs_set", json!({ "reset": ["documents.keep_tags_on_edit"] }));
+    assert_eq!(ok(&mut a, "edit_keep_tags", json!({})), json!({ "enabled": true }));
+}

@@ -77,9 +77,10 @@ pub fn color_profile_limit() -> usize {
     pdfcraft_edit::convert_colors::icc::MAX_PROFILE
 }
 pub use pdfcraft_edit::{
-    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
-    MarkStyle, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
+    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter,
+    MAX_MARK_OFFSET, MarkKind, MarkStyle, MarkVisibility, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
 };
+pub use pdfcraft_edit::{DEFAULT_LINE_SPACING, LINE_SPACING_RANGE, MAX_PARA_SPACE, line_height as text_line_height};
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
     Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, PageTrigger, TabOrder, Trigger as FieldTrigger,
@@ -100,6 +101,16 @@ pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, Te
 pub use pdfcraft_edit::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering};
 pub use pdfcraft_measure as measure;
 pub use pdfcraft_xfa::Report as XfaLayout;
+
+/// A file numbered by [`Session::bates_number_file`]: its page count, first and last Bates
+/// numbers, and the saved PDF.
+#[derive(Clone, Debug)]
+pub struct BatesFile {
+    pub pages: usize,
+    pub first: u64,
+    pub last: u64,
+    pub bytes: Arc<Vec<u8>>,
+}
 
 /// A change to an existing page image.
 #[derive(Clone, Debug, PartialEq)]
@@ -4029,6 +4040,39 @@ impl Session {
         guard(|| write_incremental(&editor.cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
     }
 
+    /// Bates-number another file, continuing a numbering (Acrobat's Bates Numbering across a
+    /// list of files): open `bytes` (with `password` when encrypted) in this session, add header
+    /// and footer `hf` to every page with its Bates numbers starting at `start`, and return the
+    /// saved PDF. The file is closed again either way; the document open in the app is not
+    /// touched. `hf` must hold a `<<Bates Number…>>` token.
+    pub fn bates_number_file(
+        &mut self,
+        name: &str,
+        bytes: Arc<Vec<u8>>,
+        password: Option<&str>,
+        hf: &HeaderFooter,
+        start: u64,
+        replace: bool,
+    ) -> Result<BatesFile, String> {
+        if !hf.text.iter().any(|t| bates_start(t).is_some()) {
+            return Err("put a <<Bates Number#digits#start#prefix#suffix>> token in a header or footer".into());
+        }
+        let id = self.open(name.to_string(), None, bytes, password).map_err(|e| e.to_string())?;
+        let numbered = (|| {
+            let pages = self.get(id).map_or(0, |d| d.info.pages.len());
+            let mut settings = hf.clone();
+            for t in &mut settings.text {
+                *t = with_bates_start(t, start);
+            }
+            self.apply(id, Edit::AddHeaderFooter { pages: (0..pages).collect(), settings, replace })?;
+            Ok::<_, EditError>((pages, self.save_bytes(id)?))
+        })();
+        self.close(id);
+        let (pages, bytes) = numbered.map_err(|e| e.to_string())?;
+        let last = start.saturating_add((pages as u64).saturating_sub(1));
+        Ok(BatesFile { pages, first: start, last, bytes })
+    }
+
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
     pub fn save_full_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
@@ -4192,7 +4236,9 @@ impl Session {
         // Printed as displayed: comments and widgets without an appearance get the one drawn for
         // the page view (in the print copy only).
         let cos = pdfcraft_annot::with_missing_appearances(&cos).unwrap_or(cos);
-        let cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
+        let mut cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
+        // Watermarks shown only on screen stay off paper (print-only ones need nothing).
+        pdfcraft_edit::without_screen_only_marks(&mut cos)?;
         pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
     }
 

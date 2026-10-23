@@ -2649,3 +2649,52 @@ compare-page	Moved	已移動
 	Change reading order	變更閱讀順序
 	Change tag properties	變更標籤內容
 	Tag region	為區域加上標籤
+	Add files to number	加入要編號的檔案
+	Align and distribute	對齊與分佈
+	Align bottom	底端對齊
+	Align horizontal centers	水平置中
+	Align to the page	與頁面對齊
+	Align top	頂端對齊
+	Align vertical centers	垂直置中
+	Bates Number Options	貝茲編號選項
+	Bates numbering… file {d} of {t}	正在加上貝茲編號… 第 {d} 個檔案，共 {t} 個
+	Bulleted list	項目符號清單
+	Choose a destination	選擇目的地
+	Choose a folder for the numbered files	選擇存放已編號檔案的資料夾
+	Custom view ({kind})	自訂檢視（{kind}）
+	Custom view ({zoom}%)	自訂檢視（{zoom}%）
+	Distribute horizontally	水平分佈
+	Distribute vertically	垂直分佈
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	編輯、新增和刪除的文字與影像，會在同一個復原步驟中更新加上標籤之文件的結構。
+	File name suffix	檔名後綴
+	Fit height	符合高度
+	Fit page	符合頁面
+	Go to a named destination	前往具名目的地
+	Go to the page as it is shown now: its position and zoom	依目前的顯示方式（位置與縮放）前往該頁
+	Horizontal offset	水平位移
+	Indent list	增加清單縮排
+	Inherit zoom	沿用縮放
+	Keep structure tags when editing content	編輯內容時保留結構標籤
+	Number of digits	位數
+	Numbered list	編號清單
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	已為 {total} 個檔案中的 {done} 個編號；無法為 {name} 編號：{e}
+	Numbered {n} more files, up to {last}	又為 {n} 個檔案編號，直到 {last}
+	Outdent list	減少清單縮排
+	Remove list	移除清單
+	Select three or more objects to distribute them	選取三個以上的物件才能分佈
+	Show when displaying on screen	在螢幕上顯示時顯示
+	Show when printing	列印時顯示
+	Space after paragraphs	段落後間距
+	Start number	起始編號
+	Suffix	後綴
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	編號會依序延續到這些檔案。每個檔案都會在您選擇的資料夾中產生一份編號副本；原始檔案保持不變。
+	This document has no named destinations.	此文件沒有具名目的地。
+	Use current view	使用目前檢視
+	Vertical offset	垂直位移
+	Bates numbering of other files couldn't start; try again	無法開始為其他檔案加上貝茲編號；請再試一次
+	Bates numbering of other files is already running	已在為其他檔案加上貝茲編號
+	That's as many files as one Bates numbering run takes	一次貝茲編號最多只能處理這麼多檔案
+	Numbering other files arrives on the web with folder pickers	為其他檔案編號將隨資料夾選擇器一起推出網頁版
+	Select objects with Edit objects first	請先用「編輯物件」選取物件
+	Select a text box, or click into a paragraph, first	請先選取文字方塊，或在段落中按一下
+	That didn't work: an internal error stopped it ({m}).	未能完成：內部錯誤使其中止（{m}）。

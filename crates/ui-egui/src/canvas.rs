@@ -2968,6 +2968,13 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 }
                 ui.separator();
             }
+            // Edit objects: the selection's menu.
+            if tool == QuickTool::EditObject && can_modify && !view.objects.selected.is_empty() {
+                if let Some(change) = crate::object_ui::context_menu(ui, view.objects.selected.len()) {
+                    view.pending_edit = view.objects.edit(change);
+                }
+                return;
+            }
             // Preparing a form: the selected field's menu.
             if preparing && let Some((name, wi)) = view.prepare.selected.clone() {
                 // Several fields: Align, Center, Distribute, Set Fields to Same Size.

@@ -188,3 +188,104 @@ fn the_rotation_handle_turns_the_selection() {
     let state = h.state().views[0].objects.selected.clone();
     assert_eq!(state, vec![0]);
 }
+
+fn right_click(h: &mut Harness<'static, PdfCraftApp>, p: Pos2) {
+    h.hover_at(p);
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.input_mut().events.push(egui::Event::PointerButton {
+            pos: p,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run_steps(3);
+}
+
+fn rects(h: &Harness<'static, PdfCraftApp>) -> Vec<[f64; 4]> {
+    objects(h).iter().map(|o| o.rect.unwrap()).collect()
+}
+
+#[test]
+fn the_panel_and_the_menu_align_and_distribute_the_selection() {
+    let mut h = harness();
+    // Nothing selected: the commands say what to do and change nothing.
+    let before = rects(&h);
+    assert!(h.state_mut().execute("object.align_left"));
+    h.run_steps(2);
+    assert_eq!(h.state().toast.clone().unwrap().0, "Select objects with Edit objects first");
+    assert_eq!(rects(&h), before);
+    assert_eq!(undo_label(&h), None);
+
+    // Both squares: the panel's align row lines up their left edges, one step.
+    let (from, to) = (at(&h, 5.0, 5.0), at(&h, 260.0, 160.0));
+    drag(&mut h, from, to);
+    assert_eq!(selected(&h), vec![0, 1]);
+    h.get_by_label("Align and distribute");
+    h.get_by_label("Align left").click();
+    h.run_steps(3);
+    let r = rects(&h);
+    assert!((r[0][0] - r[1][0]).abs() < 0.6, "{r:?}");
+    assert_eq!(undo_label(&h).as_deref(), Some("Align left"));
+    assert_eq!(selected(&h), vec![0, 1], "the selection stays");
+    // Two objects can't be distributed: the buttons do nothing and the command explains.
+    let aligned = rects(&h);
+    h.get_by_label("Distribute horizontally").click();
+    h.run_steps(3);
+    assert_eq!(rects(&h), aligned);
+    assert!(h.state_mut().execute("object.distribute_vertical"));
+    h.run_steps(2);
+    assert_eq!(h.state().toast.clone().unwrap().0, "Select three or more objects to distribute them");
+    assert_eq!(rects(&h), aligned);
+
+    // Right-click the selection: Align → Align top from the menu.
+    let p = at(&h, 50.0, 70.0);
+    right_click(&mut h, p);
+    h.get_by_label("Align ⏵").hover();
+    h.run_steps(3);
+    // The panel has an "Align top" button too; the menu's is drawn last.
+    assert_eq!(h.query_all_by_label("Align top").count(), 2);
+    h.query_all_by_label("Align top").last().unwrap().click();
+    h.run_steps(3);
+    let r = rects(&h);
+    assert!((r[0][3] - r[1][3]).abs() < 0.6, "tops line up: {r:?}");
+    assert_eq!(undo_label(&h).as_deref(), Some("Align top"));
+    // Arrange by command: the squares go above the text.
+    assert!(h.state_mut().execute("object.bring_to_front"));
+    h.run_steps(3);
+    assert_eq!(undo_label(&h).as_deref(), Some("Bring to front"));
+    assert_eq!(objects(&h)[0].kind, pdfcraft_engine::ObjectKind::Text);
+
+    // All three: distribute horizontally by command; their centres are evenly spaced.
+    let (from, to) = (at(&h, 2.0, 2.0), at(&h, 298.0, 298.0));
+    drag(&mut h, from, to);
+    assert_eq!(selected(&h).len(), 3);
+    assert!(h.state_mut().execute("object.distribute_horizontal"));
+    h.run_steps(3);
+    assert_eq!(undo_label(&h).as_deref(), Some("Distribute horizontally"));
+    // Undo, one step each.
+    for _ in 0..4 {
+        assert!(h.state_mut().execute("edit.undo"));
+        h.run_steps(2);
+    }
+    assert_eq!(rects(&h), before);
+}
+
+#[test]
+fn one_object_aligns_to_the_page() {
+    let mut h = harness();
+    let p = at(&h, 50.0, 70.0);
+    click(&mut h, p);
+    assert_eq!(selected(&h), vec![0]);
+    h.get_by_label("Align to the page");
+    h.get_by_label("Align right").click();
+    h.run_steps(3);
+    let r = rects(&h)[0];
+    assert!((r[2] - 300.0).abs() < 0.6, "against the page's right edge: {r:?}");
+    assert!(h.state_mut().execute("object.align_bottom"));
+    h.run_steps(3);
+    assert!(rects(&h)[0][1].abs() < 0.6, "{:?}", rects(&h)[0]);
+    // An unknown object command is refused without a panic.
+    assert!(!h.state_mut().execute("object.align_sideways"));
+}

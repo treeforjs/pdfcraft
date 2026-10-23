@@ -211,3 +211,84 @@ fn a_kept_draft_goes_with_its_deleted_page() {
     h.run_steps(2);
     assert!(h.state().views[0].content.draft.is_none());
 }
+
+fn first_text(h: &Harness<'static, PdfCraftApp>) -> pdfcraft_engine::AddedText {
+    match added(h).into_iter().next().map(|a| a.content) {
+        Some(pdfcraft_engine::AddedContent::Text(t)) => t,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn undo_label(h: &Harness<'static, PdfCraftApp>) -> Option<String> {
+    let s = h.state();
+    s.session.get(s.views[0].id).unwrap().can_undo().map(String::from)
+}
+
+#[test]
+fn the_format_panel_makes_lists_and_spaces_lines_and_paragraphs() {
+    let mut h = harness();
+    // Nothing to put in a list yet: the command says what to do.
+    assert!(h.state_mut().execute("edit.list.bulleted"));
+    h.run_steps(2);
+    assert_eq!(h.state().toast.clone().unwrap().0, "Select a text box, or click into a paragraph, first");
+    assert!(h.state_mut().execute("edit.text"));
+    h.run_steps(2);
+    let p = at(&h, 40.0, 300.0);
+    click(&mut h, p);
+    h.event(egui::Event::Text("One".into()));
+    h.key_press(egui::Key::Enter);
+    h.event(egui::Event::Text("Two".into()));
+    h.run_steps(2);
+    h.get_by_label("Done adding text").click();
+    h.run_steps(4);
+    assert_eq!(first_text(&h).text, "One\nTwo");
+
+    // Bulleted from the panel: every paragraph is a disc item, one step.
+    h.get_by_label("Bulleted list").click();
+    h.run_steps(3);
+    let t = first_text(&h);
+    assert_eq!(t.list.len(), 2, "{:?}", t.list);
+    assert!(
+        t.list.iter().all(|i| i.is_some_and(|i| i.style == pdfcraft_engine::ListStyle::Bullet(pdfcraft_engine::Bullet::Disc) && i.level == 0)),
+        "{:?}",
+        t.list
+    );
+    assert_eq!(undo_label(&h).as_deref(), Some("Format list"));
+    // Numbered and indented by command (their menu items and shortcuts).
+    assert!(h.state_mut().execute("edit.list.numbered"));
+    h.run_steps(3);
+    assert!(first_text(&h).list.iter().all(|i| i.is_some_and(|i| matches!(i.style, pdfcraft_engine::ListStyle::Number(_)))));
+    assert!(h.state_mut().execute("edit.list.indent"));
+    h.run_steps(3);
+    assert!(first_text(&h).list.iter().all(|i| i.is_some_and(|i| i.level == 1)));
+    h.get_by_label("Outdent list").click();
+    h.run_steps(3);
+    assert!(first_text(&h).list.iter().all(|i| i.is_some_and(|i| i.level == 0)));
+    // Numbered again toggles the list off; so does Remove list.
+    h.get_by_label("Numbered list").click();
+    h.run_steps(3);
+    assert!(first_text(&h).list.iter().all(Option::is_none));
+    assert!(h.state_mut().execute("edit.list.bulleted"));
+    h.run_steps(3);
+    assert!(h.state_mut().execute("edit.list.remove"));
+    h.run_steps(3);
+    assert!(first_text(&h).list.iter().all(Option::is_none));
+
+    // Line spacing and space after paragraphs, from their lists.
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Line spacing").click();
+    h.run_steps(3);
+    h.get_by_label("2.00×").click();
+    h.run_steps(3);
+    assert_eq!(first_text(&h).line_spacing, 2.0);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Space after paragraphs").click();
+    h.run_steps(3);
+    h.get_by_label("12 pt").click();
+    h.run_steps(3);
+    let t = first_text(&h);
+    assert_eq!((t.line_spacing, t.para_space), (2.0, 12.0));
+    // Each change was its own step.
+    assert!(h.state_mut().execute("edit.undo"));
+    h.run_steps(2);
+    assert_eq!(first_text(&h).para_space, 0.0);
+    assert_eq!(first_text(&h).line_spacing, 2.0);
+}

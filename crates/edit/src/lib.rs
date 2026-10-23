@@ -105,7 +105,12 @@ pub struct Watermark {
     pub behind: bool,
     /// Offset of the centre from the page centre, in points (right, up).
     pub offset: [f64; 2],
+    /// Shown when printing, on screen, or both.
+    pub visibility: MarkVisibility,
 }
+
+/// The largest watermark offset from the page centre, in points (about 3.5 m).
+pub const MAX_MARK_OFFSET: f64 = 10_000.0;
 
 impl Default for Watermark {
     fn default() -> Self {
@@ -119,6 +124,7 @@ impl Default for Watermark {
             rotation: 45.0,
             behind: false,
             offset: [0.0; 2],
+            visibility: MarkVisibility::Always,
         }
     }
 }
@@ -365,8 +371,13 @@ fn place(doc: &mut Document, page: &pdfcraft_model::Page, kind: MarkKind, conten
 
 /// Put content on a page, tagged `tag` (see [`place`]).
 fn place_tagged(doc: &mut Document, page: &pdfcraft_model::Page, tag: &str, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
+    place_dict(doc, page, tagged(tag), content, behind)
+}
+
+/// Put content on a page in a stream with dictionary `dict` (see [`place`]).
+fn place_dict(doc: &mut Document, page: &pdfcraft_model::Page, dict: Dict, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
     let mut list = contents(doc, page)?;
-    let mark = Object::Ref(doc.add(Object::Stream(Stream::flate(tagged(tag), &content))));
+    let mark = Object::Ref(doc.add(Object::Stream(Stream::flate(dict, &content))));
     if behind {
         list.insert(0, mark);
     } else {
@@ -523,10 +534,16 @@ pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter,
         content.extend(body);
         content.extend_from_slice(END.as_bytes());
         add_resources(doc, page, None, None)?;
-        let page = &page_list(doc)[i];
+        let page = &nth_page(doc, i)?;
         place(doc, page, kind, content, false)?;
     }
     Ok(())
+}
+
+/// Page `i` of `doc`, or an error when there is none (the page list can change as marks are
+/// placed, so it is looked up each time).
+fn nth_page(doc: &Document, i: usize) -> Result<pdfcraft_model::Page, EditError> {
+    page_list(doc).get(i).cloned().ok_or_else(|| EditError::Invalid(format!("page {} does not exist", i.saturating_add(1))))
 }
 
 /// Add a text watermark to `pages`.
@@ -543,30 +560,50 @@ pub fn add_watermark(doc: &mut Document, pages: &[usize], wm: &Watermark, replac
     if !(wm.opacity.is_finite() && wm.rotation.is_finite() && wm.font_size.is_finite() && wm.font_size >= 0.0) {
         return Err(EditError::Invalid("invalid watermark settings".into()));
     }
+    if !wm.offset.iter().all(|v| v.is_finite() && v.abs() <= MAX_MARK_OFFSET) {
+        return Err(EditError::Invalid(format!("watermark offsets must be numbers from -{MAX_MARK_OFFSET} to {MAX_MARK_OFFSET} points")));
+    }
+    if !(wm.scale.is_finite() && wm.scale > 0.0 && wm.scale <= 1.0) {
+        return Err(EditError::Invalid("the watermark scale must be more than 0 and at most 1 (100% of the page)".into()));
+    }
+    // Optional content opened inside the mark, and the stream's dictionary.
+    let (oc_open, oc_close) = match wm.visibility.names() {
+        Some((_, name)) => (format!("/OC /{name} BDC\n"), "EMC\n"),
+        None => (String::new(), ""),
+    };
+    let mut dict = tagged(MarkKind::Watermark.tag());
+    if let Some((show, _)) = wm.visibility.names() {
+        dict.set(b"PCShow".to_vec(), Object::name(show));
+    }
     if replace {
         remove_marks(doc, pages, MarkKind::Watermark)?;
     }
     let opacity = wm.opacity.clamp(0.0, 1.0);
     let lines: Vec<&str> = text.lines().collect();
     for &i in pages {
-        let page = page_list(doc)[i].clone();
+        let page = nth_page(doc, i)?;
         let (w, h) = page.display_size(doc);
         if let Some(src) = &wm.source {
             let mut content = begin(MarkKind::Watermark, "Watermark", page.view_matrix(doc));
+            content.push_str(&oc_open);
             content.push_str(&format!("/PCGS{} gs\n", (opacity * 100.0).round() as i64));
             content.push_str(&picture(src, (w, h), wm.scale, wm.rotation, wm.offset));
+            content.push_str(oc_close);
             content.push_str(END);
             add_resources(doc, &page, Some(opacity), None)?;
-            add_picture_resource(doc, &page_list(doc)[i].clone(), src)?;
-            let page = &page_list(doc)[i];
-            place(doc, page, MarkKind::Watermark, content.into_bytes(), wm.behind)?;
+            add_picture_resource(doc, &nth_page(doc, i)?, src)?;
+            mark_visibility::group_on_page(doc, &nth_page(doc, i)?, wm.visibility)?;
+            let page = &nth_page(doc, i)?;
+            place_dict(doc, page, dict.clone(), content.into_bytes(), wm.behind)?;
             continue;
         }
         let widest = lines.iter().map(|l| helvetica_width(l, 1.0)).fold(0.0, f64::max).max(0.01);
-        let size = if wm.font_size > 0.0 { wm.font_size } else { ((w * w + h * h).sqrt() * 0.5 / widest).clamp(6.0, 300.0) };
+        // Fitted: `scale` of the page diagonal (half by default).
+        let size = if wm.font_size > 0.0 { wm.font_size } else { ((w * w + h * h).sqrt() * wm.scale / widest).clamp(6.0, 300.0) };
         let (s, c) = wm.rotation.to_radians().sin_cos();
         let (cx, cy) = (w / 2.0 + wm.offset[0], h / 2.0 + wm.offset[1]);
         let mut content = begin(MarkKind::Watermark, "Watermark", page.view_matrix(doc)).into_bytes();
+        content.extend(oc_open.bytes());
         content.extend(
             format!(
                 "/PCGS{} gs\n{} {} {} {} {} {} cm\nBT\n/PCHelv {} Tf\n{}\n",
@@ -589,10 +626,12 @@ pub fn add_watermark(doc: &mut Document, pages: &[usize], wm: &Watermark, replac
             content.extend(text_op(-tw / 2.0, total / 2.0 - li as f64 * line_h - size * 0.35, line));
         }
         content.extend_from_slice(b"ET\n");
+        content.extend_from_slice(oc_close.as_bytes());
         content.extend_from_slice(END.as_bytes());
         add_resources(doc, &page, Some(opacity), None)?;
-        let page = &page_list(doc)[i];
-        place(doc, page, MarkKind::Watermark, content, wm.behind)?;
+        mark_visibility::group_on_page(doc, &nth_page(doc, i)?, wm.visibility)?;
+        let page = &nth_page(doc, i)?;
+        place_dict(doc, page, dict.clone(), content, wm.behind)?;
     }
     Ok(())
 }
@@ -606,7 +645,7 @@ pub fn add_background(doc: &mut Document, pages: &[usize], bg: &Background, repl
     }
     let opacity = if bg.opacity.is_finite() { bg.opacity.clamp(0.0, 1.0) } else { 1.0 };
     for &i in pages {
-        let page = page_list(doc)[i].clone();
+        let page = nth_page(doc, i)?;
         let (w, h) = page.display_size(doc);
         let mut content = begin(MarkKind::Background, "Background", page.view_matrix(doc));
         match &bg.source {
@@ -619,9 +658,9 @@ pub fn add_background(doc: &mut Document, pages: &[usize], bg: &Background, repl
         content.push_str(END);
         add_resources(doc, &page, Some(opacity), None)?;
         if let Some(src) = &bg.source {
-            add_picture_resource(doc, &page_list(doc)[i].clone(), src)?;
+            add_picture_resource(doc, &nth_page(doc, i)?, src)?;
         }
-        let page = &page_list(doc)[i];
+        let page = &nth_page(doc, i)?;
         place(doc, page, MarkKind::Background, content.into_bytes(), true)?;
     }
     Ok(())
@@ -676,6 +715,8 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
     found
 }
 
+pub mod mark_visibility;
+pub use mark_visibility::{MarkVisibility, without_screen_only_marks};
 pub mod ink_aliases;
 pub use ink_aliases::{AliasReport, alias_inks};
 pub mod convert_colors;
@@ -700,7 +741,10 @@ pub use background::strip_text_and_images;
 pub mod lists;
 pub use lists::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering, edit_list, list_edit_changes};
 pub mod added;
-pub use added::{Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, first_undrawable, list_added, update_content};
+pub use added::{
+    Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, first_undrawable, line_height, list_added, update_content,
+};
+pub use added::{DEFAULT_LINE_SPACING, LINE_SPACING_RANGE, MAX_PARA_SPACE};
 
 #[cfg(test)]
 mod rtl_cjk_tests;

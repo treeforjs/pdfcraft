@@ -2692,3 +2692,52 @@ compare-page	Moved	已移动
 	Change reading order	更改阅读顺序
 	Change tag properties	更改标签属性
 	Tag region	为区域添加标签
+	Add files to number	添加要编号的文件
+	Align and distribute	对齐和分布
+	Align bottom	底端对齐
+	Align horizontal centers	水平居中
+	Align to the page	与页面对齐
+	Align top	顶端对齐
+	Align vertical centers	垂直居中
+	Bates Number Options	贝茨编号选项
+	Bates numbering… file {d} of {t}	正在添加贝茨编号… 第 {d} 个文件，共 {t} 个
+	Bulleted list	项目符号列表
+	Choose a destination	选择目标
+	Choose a folder for the numbered files	选择存放已编号文件的文件夹
+	Custom view ({kind})	自定义视图（{kind}）
+	Custom view ({zoom}%)	自定义视图（{zoom}%）
+	Distribute horizontally	水平分布
+	Distribute vertically	垂直分布
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	编辑、添加和删除的文本与图像会在同一撤消步骤中更新带标签文档的结构。
+	File name suffix	文件名后缀
+	Fit height	适合高度
+	Fit page	适合页面
+	Go to a named destination	转到命名目标
+	Go to the page as it is shown now: its position and zoom	按当前显示方式（位置和缩放）转到该页
+	Horizontal offset	水平偏移
+	Indent list	增加列表缩进
+	Inherit zoom	继承缩放
+	Keep structure tags when editing content	编辑内容时保留结构标签
+	Number of digits	位数
+	Numbered list	编号列表
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	已为 {total} 个文件中的 {done} 个编号；无法为 {name} 编号：{e}
+	Numbered {n} more files, up to {last}	又为 {n} 个文件编号，直到 {last}
+	Outdent list	减少列表缩进
+	Remove list	移除列表
+	Select three or more objects to distribute them	选择三个或更多对象才能分布
+	Show when displaying on screen	在屏幕上显示时显示
+	Show when printing	打印时显示
+	Space after paragraphs	段后间距
+	Start number	起始编号
+	Suffix	后缀
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	编号会按顺序延续到这些文件中。每个文件都会在您选择的文件夹中生成一份编号副本；原文件保持不变。
+	This document has no named destinations.	此文档没有命名目标。
+	Use current view	使用当前视图
+	Vertical offset	垂直偏移
+	Bates numbering of other files couldn't start; try again	无法开始为其他文件添加贝茨编号；请重试
+	Bates numbering of other files is already running	已在为其他文件添加贝茨编号
+	That's as many files as one Bates numbering run takes	一次贝茨编号最多只能处理这么多文件
+	Numbering other files arrives on the web with folder pickers	为其他文件编号将随文件夹选择器一起登陆网页版
+	Select objects with Edit objects first	请先用“编辑对象”选择对象
+	Select a text box, or click into a paragraph, first	请先选择文本框，或点击某个段落
+	That didn't work: an internal error stopped it ({m}).	未能完成：内部错误使其中止（{m}）。

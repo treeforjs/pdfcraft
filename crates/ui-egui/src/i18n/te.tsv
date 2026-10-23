@@ -2689,3 +2689,52 @@ compare-page	Moved	తరలించబడింది
 	Change reading order	చదివే క్రమం మార్చు
 	Change tag properties	ట్యాగ్ లక్షణాలు మార్చు
 	Tag region	ప్రాంతాన్ని ట్యాగ్ చేయి
+	Add files to number	సంఖ్యలు వేయడానికి ఫైళ్లను జోడించు
+	Align and distribute	సమలేఖనం మరియు పంపిణీ
+	Align bottom	దిగువకు సమలేఖనం
+	Align horizontal centers	అడ్డంగా మధ్యలో సమలేఖనం
+	Align to the page	పేజీకి సమలేఖనం
+	Align top	పైకి సమలేఖనం
+	Align vertical centers	నిలువుగా మధ్యలో సమలేఖనం
+	Bates Number Options	బేట్స్ సంఖ్య ఎంపికలు
+	Bates numbering… file {d} of {t}	బేట్స్ సంఖ్యలు వేస్తోంది… {t}లో ఫైల్ {d}
+	Bulleted list	బుల్లెట్ జాబితా
+	Choose a destination	గమ్యాన్ని ఎంచుకోండి
+	Choose a folder for the numbered files	సంఖ్యలు వేసిన ఫైళ్ల కోసం ఫోల్డర్‌ను ఎంచుకోండి
+	Custom view ({kind})	అనుకూల వీక్షణ ({kind})
+	Custom view ({zoom}%)	అనుకూల వీక్షణ ({zoom}%)
+	Distribute horizontally	అడ్డంగా పంపిణీ
+	Distribute vertically	నిలువుగా పంపిణీ
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	సవరించిన, జోడించిన మరియు తొలగించిన పాఠ్యం, చిత్రాలు ట్యాగ్ చేసిన పత్రం నిర్మాణాన్ని అదే అన్‌డూ దశలో నవీకరిస్తాయి.
+	File name suffix	ఫైల్ పేరు ప్రత్యయం
+	Fit height	ఎత్తుకు సరిపెట్టు
+	Fit page	పూర్తి పేజీ
+	Go to a named destination	పేరున్న గమ్యానికి వెళ్లు
+	Go to the page as it is shown now: its position and zoom	పేజీ ఇప్పుడు కనిపిస్తున్నట్లుగా దానికి వెళ్లు: దాని స్థానం మరియు జూమ్
+	Horizontal offset	అడ్డ ఆఫ్‌సెట్
+	Indent list	జాబితా ఇండెంట్ పెంచు
+	Inherit zoom	జూమ్‌ను వారసత్వంగా తీసుకో
+	Keep structure tags when editing content	కంటెంట్‌ను సవరించేటప్పుడు నిర్మాణ ట్యాగ్‌లను ఉంచు
+	Number of digits	అంకెల సంఖ్య
+	Numbered list	సంఖ్యల జాబితా
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} ఫైళ్లలో {done}కి సంఖ్యలు వేశాం; {name}కి సంఖ్యలు వేయలేకపోయాం: {e}
+	Numbered {n} more files, up to {last}	మరో {n} ఫైళ్లకు {last} వరకు సంఖ్యలు వేశాం
+	Outdent list	జాబితా ఇండెంట్ తగ్గించు
+	Remove list	జాబితాను తీసివేయి
+	Select three or more objects to distribute them	పంపిణీ చేయడానికి మూడు లేదా అంతకంటే ఎక్కువ వస్తువులను ఎంచుకోండి
+	Show when displaying on screen	తెరపై చూపేటప్పుడు చూపించు
+	Show when printing	ముద్రించేటప్పుడు చూపించు
+	Space after paragraphs	పేరాల తర్వాత అంతరం
+	Start number	ప్రారంభ సంఖ్య
+	Suffix	ప్రత్యయం
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	సంఖ్యలు ఈ ఫైళ్లలో వరుసగా కొనసాగుతాయి. ప్రతిదానికీ మీరు ఎంచుకున్న ఫోల్డర్‌లో సంఖ్యలు వేసిన ప్రతి వస్తుంది; ఫైళ్లు అలాగే ఉంటాయి.
+	This document has no named destinations.	ఈ పత్రంలో పేరున్న గమ్యాలు లేవు.
+	Use current view	ప్రస్తుత వీక్షణను ఉపయోగించు
+	Vertical offset	నిలువు ఆఫ్‌సెట్
+	Bates numbering of other files couldn't start; try again	ఇతర ఫైళ్లకు బేట్స్ సంఖ్యలు వేయడం మొదలవలేదు; మళ్లీ ప్రయత్నించండి
+	Bates numbering of other files is already running	ఇతర ఫైళ్లకు బేట్స్ సంఖ్యలు వేయడం ఇప్పటికే జరుగుతోంది
+	That's as many files as one Bates numbering run takes	ఒక బేట్స్ సంఖ్యల పరుగు ఇన్ని ఫైళ్లనే తీసుకుంటుంది
+	Numbering other files arrives on the web with folder pickers	ఇతర ఫైళ్లకు సంఖ్యలు వేయడం ఫోల్డర్ ఎంపికతో పాటు వెబ్‌కు వస్తుంది
+	Select objects with Edit objects first	ముందుగా వస్తువులను సవరించు సాధనంతో వస్తువులను ఎంచుకోండి
+	Select a text box, or click into a paragraph, first	ముందుగా ఒక టెక్స్ట్ బాక్స్‌ను ఎంచుకోండి, లేదా ఒక పేరాలో క్లిక్ చేయండి
+	That didn't work: an internal error stopped it ({m}).	అది పని చేయలేదు: అంతర్గత లోపం దాన్ని ఆపింది ({m}).

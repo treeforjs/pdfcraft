@@ -2752,3 +2752,51 @@ compare-page	Moved	Přesunutá
 	Change reading order	Změnit pořadí čtení
 	Change tag properties	Změnit vlastnosti tagu
 	Tag region	Otagovat oblast
+	Add files to number	Přidat soubory k číslování
+	Align and distribute	Zarovnat a rozmístit
+	Align bottom	Zarovnat dolů
+	Align horizontal centers	Zarovnat středy vodorovně
+	Align to the page	Zarovnat ke stránce
+	Align top	Zarovnat nahoru
+	Align vertical centers	Zarovnat středy svisle
+	Bates Number Options	Možnosti Batesova číslování
+	Bates numbering… file {d} of {t}	Batesovo číslování… soubor {d} z {t}
+	Bulleted list	Odrážkový seznam
+	Choose a destination	Vyberte cíl
+	Choose a folder for the numbered files	Vyberte složku pro očíslované soubory
+	Custom view ({kind})	Vlastní zobrazení ({kind})
+	Custom view ({zoom}%)	Vlastní zobrazení ({zoom} %)
+	Distribute horizontally	Rozmístit vodorovně
+	Distribute vertically	Rozmístit svisle
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Upravený, přidaný a odstraněný text a obrázky aktualizují strukturu označeného dokumentu ve stejném kroku zpět.
+	File name suffix	Přípona názvu souboru
+	Fit height	Přizpůsobit výšce
+	Fit page	Celá stránka
+	Go to a named destination	Přejít na pojmenovaný cíl
+	Go to the page as it is shown now: its position and zoom	Přejít na stránku tak, jak je nyní zobrazena: pozice a lupa
+	Horizontal offset	Vodorovný posun
+	Indent list	Zvětšit odsazení seznamu
+	Inherit zoom	Převzít lupu
+	Keep structure tags when editing content	Zachovat strukturní tagy při úpravách obsahu
+	Number of digits	Počet číslic
+	Numbered list	Číslovaný seznam
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	Očíslováno {done} z {total} souborů; {name} se nepodařilo očíslovat: {e}
+	Numbered {n} more files, up to {last}	Očíslováno dalších {n} souborů, až po {last}
+	Outdent list	Zmenšit odsazení seznamu
+	Remove list	Odebrat seznam
+	Select three or more objects to distribute them	Vyberte tři nebo více objektů, abyste je mohli rozmístit
+	Show when displaying on screen	Zobrazit na obrazovce
+	Show when printing	Zobrazit při tisku
+	Space after paragraphs	Mezera za odstavci
+	Start number	Počáteční číslo
+	Suffix	Přípona
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	Číslování pokračuje v těchto souborech v pořadí. Každý dostane očíslovanou kopii ve složce, kterou zvolíte; samotné soubory zůstanou beze změny.
+	This document has no named destinations.	Tento dokument nemá žádné pojmenované cíle.
+	Use current view	Použít aktuální zobrazení
+	Vertical offset	Svislý posun
+	Bates numbering of other files couldn't start; try again	Batesovo číslování dalších souborů se nepodařilo spustit; zkuste to znovu
+	Bates numbering of other files is already running	Batesovo číslování dalších souborů už probíhá
+	That's as many files as one Bates numbering run takes	Víc souborů jedno Batesovo číslování nepojme
+	Numbering other files arrives on the web with folder pickers	Číslování dalších souborů přijde na web spolu s výběrem složek
+	Select objects with Edit objects first	Nejprve vyberte objekty nástrojem Upravit objekty
+	Select a text box, or click into a paragraph, first	Nejprve vyberte textové pole nebo klikněte do odstavce

@@ -220,3 +220,27 @@ fn hostile_values_and_corrupt_settings_keep_defaults() {
     fresh.restore(r#"{"prefs": {"documents.recent_files": 1e99, "accessibility.text_scale": 1e99, "documents.autosave_minutes": -3}}"#);
     assert_eq!((fresh.session.prefs().recent_files, fresh.session.prefs().text_scale, fresh.autosave_interval()), (50, 2.0, None));
 }
+
+#[test]
+fn keeping_structure_tags_is_a_visible_setting() {
+    let mut h = harness();
+    h.get_by_role_and_label(Role::Button, "Documents").click();
+    h.run_steps(3);
+    assert!(h.state().session.keep_tags_on_edit(), "on by default");
+    h.get_by_label("Keep structure tags when editing content").click();
+    h.run_steps(3);
+    assert!(!h.state().session.keep_tags_on_edit(), "the session follows the box");
+    h.get_by_label("Keep structure tags when editing content").click();
+    h.run_steps(3);
+    assert!(h.state().session.keep_tags_on_edit());
+    // Search finds it by what it is about; ui.set pref.<key> reaches it; nonsense is refused.
+    h.state_mut().prefs_ui.query = "reading order".into();
+    h.run_steps(2);
+    h.get_by_label("Keep structure tags when editing content");
+    h.get_by_label_contains("structure in the same undo step");
+    h.state_mut().set_option("pref.documents.keep_tags_on_edit", "off").unwrap();
+    h.run_steps(2);
+    assert!(!h.state().session.keep_tags_on_edit());
+    assert!(h.state_mut().set_option("pref.documents.keep_tags_on_edit", "sometimes").is_err());
+    assert!(!h.state().session.keep_tags_on_edit());
+}

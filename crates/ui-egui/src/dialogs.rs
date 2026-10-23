@@ -1354,7 +1354,25 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if marks_now && let (Dialog::Marks(kind), Some((_, id))) = (dialog, app.active_ids()) {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
         let edit = crate::marks_ui::edit(&app.marks_draft, kind, count);
-        app.apply_edit(edit);
+        let d = &app.marks_draft;
+        // Bates numbering continued into other files: from the number after this document's last.
+        let bates =
+            d.hf.text
+                .iter()
+                .find_map(|t| pdfcraft_engine::bates_start(t))
+                .filter(|_| matches!(kind, pdfcraft_engine::MarkKind::HeaderFooter | pdfcraft_engine::MarkKind::Bates));
+        let run = bates.filter(|_| !d.bates_files.is_empty()).map(|start| crate::marks_ui::BatesRun {
+            files: d.bates_files.clone(),
+            hf: d.hf.clone(),
+            start: start.saturating_add(d.range.pages(count).len() as u64),
+            replace: d.replace,
+            suffix: d.bates_suffix.trim().to_string(),
+        });
+        if app.apply_edit(edit)
+            && let Some(run) = run
+        {
+            app.start_bates_files(run);
+        }
     }
     if boxes_now && let Some((i, id)) = app.active_ids() {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);

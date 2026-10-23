@@ -2737,3 +2737,51 @@ compare-page	Moved	Spostata
 	Change reading order	Modifica l’ordine di lettura
 	Change tag properties	Modifica le proprietà del tag
 	Tag region	Applica tag all’area
+	Add files to number	Aggiungi file da numerare
+	Align and distribute	Allinea e distribuisci
+	Align bottom	Allinea in basso
+	Align horizontal centers	Centra orizzontalmente
+	Align to the page	Allinea alla pagina
+	Align top	Allinea in alto
+	Align vertical centers	Centra verticalmente
+	Bates Number Options	Opzioni numerazione Bates
+	Bates numbering… file {d} of {t}	Numerazione Bates… file {d} di {t}
+	Bulleted list	Elenco puntato
+	Choose a destination	Scegli una destinazione
+	Choose a folder for the numbered files	Scegli una cartella per i file numerati
+	Custom view ({kind})	Vista personalizzata ({kind})
+	Custom view ({zoom}%)	Vista personalizzata ({zoom}%)
+	Distribute horizontally	Distribuisci orizzontalmente
+	Distribute vertically	Distribuisci verticalmente
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Testo e immagini modificati, aggiunti ed eliminati aggiornano la struttura di un documento con tag nello stesso passaggio di annullamento.
+	File name suffix	Suffisso del nome file
+	Fit height	Adatta altezza
+	Fit page	Pagina intera
+	Go to a named destination	Vai a una destinazione con nome
+	Go to the page as it is shown now: its position and zoom	Vai alla pagina come è visualizzata ora: posizione e zoom
+	Horizontal offset	Spostamento orizzontale
+	Indent list	Aumenta rientro elenco
+	Inherit zoom	Eredita zoom
+	Keep structure tags when editing content	Mantieni i tag di struttura durante la modifica del contenuto
+	Number of digits	Numero di cifre
+	Numbered list	Elenco numerato
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	Numerati {done} di {total} file; impossibile numerare {name}: {e}
+	Numbered {n} more files, up to {last}	Numerati altri {n} file, fino a {last}
+	Outdent list	Riduci rientro elenco
+	Remove list	Rimuovi elenco
+	Select three or more objects to distribute them	Seleziona tre o più oggetti per distribuirli
+	Show when displaying on screen	Mostra sullo schermo
+	Show when printing	Mostra in stampa
+	Space after paragraphs	Spazio dopo i paragrafi
+	Start number	Numero iniziale
+	Suffix	Suffisso
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	La numerazione continua in questi file, in ordine. Ciascuno riceve una copia numerata in una cartella a scelta; i file stessi restano invariati.
+	This document has no named destinations.	Questo documento non ha destinazioni con nome.
+	Use current view	Usa la vista corrente
+	Vertical offset	Spostamento verticale
+	Bates numbering of other files couldn't start; try again	Impossibile avviare la numerazione Bates degli altri file; riprova
+	Bates numbering of other files is already running	La numerazione Bates di altri file è già in corso
+	That's as many files as one Bates numbering run takes	Una numerazione Bates non accetta altri file
+	Numbering other files arrives on the web with folder pickers	La numerazione di altri file arriverà sul web con la scelta delle cartelle
+	Select objects with Edit objects first	Seleziona prima degli oggetti con Modifica oggetti
+	Select a text box, or click into a paragraph, first	Seleziona prima una casella di testo o fai clic in un paragrafo

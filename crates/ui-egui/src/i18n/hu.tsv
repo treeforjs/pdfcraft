@@ -2726,3 +2726,51 @@ compare-page	Moved	Áthelyezve
 	Change reading order	Olvasási sorrend módosítása
 	Change tag properties	Címke tulajdonságainak módosítása
 	Tag region	Terület címkézése
+	Add files to number	Számozandó fájlok hozzáadása
+	Align and distribute	Igazítás és elosztás
+	Align bottom	Igazítás alulra
+	Align horizontal centers	Vízszintes középre igazítás
+	Align to the page	Igazítás az oldalhoz
+	Align top	Igazítás felülre
+	Align vertical centers	Függőleges középre igazítás
+	Bates Number Options	Bates-számozás beállításai
+	Bates numbering… file {d} of {t}	Bates-számozás… {d}. fájl / {t}
+	Bulleted list	Felsorolásjeles lista
+	Choose a destination	Válasszon célt
+	Choose a folder for the numbered files	Válasszon mappát a számozott fájloknak
+	Custom view ({kind})	Egyéni nézet ({kind})
+	Custom view ({zoom}%)	Egyéni nézet ({zoom}%)
+	Distribute horizontally	Vízszintes elosztás
+	Distribute vertically	Függőleges elosztás
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	A szerkesztett, hozzáadott és törölt szöveg és képek ugyanabban a visszavonási lépésben frissítik a címkézett dokumentum szerkezetét.
+	File name suffix	Fájlnév-utótag
+	Fit height	Igazítás magassághoz
+	Fit page	Teljes oldal
+	Go to a named destination	Ugrás elnevezett célhoz
+	Go to the page as it is shown now: its position and zoom	Ugrás az oldalra úgy, ahogy most látszik: pozíció és nagyítás
+	Horizontal offset	Vízszintes eltolás
+	Indent list	Lista behúzásának növelése
+	Inherit zoom	Nagyítás öröklése
+	Keep structure tags when editing content	Szerkezeti címkék megtartása a tartalom szerkesztésekor
+	Number of digits	Számjegyek száma
+	Numbered list	Számozott lista
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} fájlból {done} számozva; {name} nem számozható: {e}
+	Numbered {n} more files, up to {last}	További {n} fájl számozva, {last}-ig
+	Outdent list	Lista behúzásának csökkentése
+	Remove list	Lista eltávolítása
+	Select three or more objects to distribute them	Az elosztáshoz jelöljön ki legalább három objektumot
+	Show when displaying on screen	Megjelenítés a képernyőn
+	Show when printing	Megjelenítés nyomtatáskor
+	Space after paragraphs	Térköz a bekezdések után
+	Start number	Kezdőszám
+	Suffix	Utótag
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	A számozás sorrendben folytatódik ezekben a fájlokban. Mindegyikről számozott másolat készül egy választott mappába; maguk a fájlok változatlanok maradnak.
+	This document has no named destinations.	Ebben a dokumentumban nincsenek elnevezett célok.
+	Use current view	Jelenlegi nézet használata
+	Vertical offset	Függőleges eltolás
+	Bates numbering of other files couldn't start; try again	Más fájlok Bates-számozása nem indult el; próbálja újra
+	Bates numbering of other files is already running	Más fájlok Bates-számozása már fut
+	That's as many files as one Bates numbering run takes	Egy Bates-számozás ennél több fájlt nem fogad
+	Numbering other files arrives on the web with folder pickers	Más fájlok számozása a mappaválasztóval együtt érkezik a webre
+	Select objects with Edit objects first	Előbb jelöljön ki objektumokat az Objektumok szerkesztése eszközzel
+	Select a text box, or click into a paragraph, first	Előbb jelöljön ki egy szövegdobozt, vagy kattintson egy bekezdésbe

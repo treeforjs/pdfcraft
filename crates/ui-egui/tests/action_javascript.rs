@@ -119,6 +119,10 @@ fn link_properties_bookmarks_and_page_actions_set_scripts() {
         url: "https://".into(),
         script: "app.alert('changed')".into(),
         target: 1,
+        view: Default::default(),
+        dest_name: String::new(),
+        names: Vec::new(),
+        here: None,
         style: l.style,
         keep: None,
     });

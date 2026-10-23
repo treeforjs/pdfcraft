@@ -281,3 +281,75 @@ fn page_paragraphs_become_a_tagged_list() {
     assert!(text(&mut a, again).contains("2. Plums"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The baselines (rect bottoms) of page 1's text lines, top to bottom.
+fn line_tops(a: &mut Automation, doc: u64) -> Vec<f64> {
+    let out = ok(a, "text_lines", json!({ "doc": doc, "page": 1 }));
+    out["lines"].as_array().unwrap().iter().map(|l| l["rect"][1].as_f64().unwrap()).collect()
+}
+
+#[test]
+fn text_boxes_take_line_and_paragraph_spacing() {
+    let dir = workdir("spacing");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "blank.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "at": [20, 20], "size": 10, "text": "One\nTwo\nThree" }));
+    let plain = line_tops(&mut a, doc);
+    assert_eq!(plain.len(), 3, "{plain:?}");
+    let gap = (plain[1] - plain[0]).abs();
+    assert!((gap - 12.0).abs() < 0.5, "default 1.2 × 10 pt: {plain:?}");
+    let item = &ok(&mut a, "content_list", json!({ "doc": doc }))["items"][0];
+    assert_eq!(item["line_spacing"], 1.2);
+    assert_eq!(item["paragraph_spacing"], 0.0);
+
+    // Double spacing and 12 pt after each paragraph: 20 + 12 between paragraphs.
+    ok(&mut a, "content_update", json!({ "doc": doc, "page": 1, "index": 1, "line_spacing": 2.0, "paragraph_spacing": 12 }));
+    let spaced = line_tops(&mut a, doc);
+    assert!(((spaced[1] - spaced[0]).abs() - 32.0).abs() < 0.5, "{spaced:?}");
+    assert!(((spaced[2] - spaced[1]).abs() - 32.0).abs() < 0.5, "{spaced:?}");
+    let item = &ok(&mut a, "content_list", json!({ "doc": doc }))["items"][0];
+    assert_eq!(item["line_spacing"], 2.0);
+    assert_eq!(item["paragraph_spacing"], 12.0);
+
+    // Saved and reopened, still spaced; undo is one step.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "spaced.pdf" }));
+    let again = ok(&mut a, "doc_open", json!({ "path": "spaced.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "content_list", json!({ "doc": again }))["items"][0]["paragraph_spacing"], 12.0);
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let back = line_tops(&mut a, doc);
+    assert!(((back[1] - back[0]).abs() - 12.0).abs() < 0.5, "{back:?}");
+
+    // A new box can start spaced.
+    ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "at": [20, 200], "size": 10, "text": "A\nB", "line_spacing": 1.5 }));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hostile_spacing_is_refused() {
+    let dir = workdir("hostile-spacing");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "blank.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "at": [20, 20], "text": "One\nTwo" }));
+    let before = ok(&mut a, "content_list", json!({ "doc": doc }));
+    for args in [
+        json!({ "line_spacing": 0.0 }),
+        json!({ "line_spacing": -1.0 }),
+        json!({ "line_spacing": 1e300 }),
+        json!({ "paragraph_spacing": -0.5 }),
+        json!({ "paragraph_spacing": 1e12 }),
+        json!({ "line_spacing": "wide" }),
+    ] {
+        let mut full = json!({ "doc": doc, "page": 1, "index": 1 });
+        for (k, v) in args.as_object().unwrap() {
+            full[k] = v.clone();
+        }
+        assert!(a.call("content_update", &full).is_err(), "{full}");
+        let mut add = json!({ "doc": doc, "page": 1, "at": [20, 100], "text": "X" });
+        for (k, v) in args.as_object().unwrap() {
+            add[k] = v.clone();
+        }
+        assert!(a.call("page_add_text", &add).is_err(), "{add}");
+    }
+    assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc })), before, "nothing changed");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1423,7 +1423,12 @@ impl Automation {
                     opacity: a.opt_num("opacity")?.unwrap_or(d.opacity),
                     rotation: a.opt_num("rotation")?.unwrap_or(d.rotation),
                     behind: a.opt_bool("behind")?.unwrap_or(false),
-                    offset: [0.0; 2],
+                    offset: [a.opt_num("offset_x")?.unwrap_or(0.0), a.opt_num("offset_y")?.unwrap_or(0.0)],
+                    visibility: pdfcraft_engine::MarkVisibility::from_flags(
+                        a.opt_bool("show_on_print")?.unwrap_or(true),
+                        a.opt_bool("show_on_screen")?.unwrap_or(true),
+                    )
+                    .map_err(|e| ToolError::InvalidArgs(e.to_string()))?,
                 };
                 Edit::AddWatermark { pages, settings: wm, replace, file }
             }
@@ -1895,7 +1900,7 @@ impl Automation {
             }
             Some(_) => return Err(ToolError::InvalidArgs("passwords must list a password (or null) for each path".into())),
         };
-        let mut hf = header_footer(a)?;
+        let hf = header_footer(a)?;
         let Some(first) = hf.text.iter().find_map(|t| pdfcraft_engine::bates_start(t)) else {
             return Err(ToolError::InvalidArgs("put a <<Bates Number#digits#start#prefix#suffix>> token in a header or footer".into()));
         };
@@ -1906,7 +1911,6 @@ impl Automation {
         };
         let replace = a.opt_bool("replace")?.unwrap_or(false);
         let suffix = a.opt_str("suffix")?.unwrap_or("_bates").to_string();
-        let templates = hf.text.clone();
         let dir = self.resolve(a.str("out_dir")?, true)?;
         std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
         let mut files = Vec::new();
@@ -1915,20 +1919,13 @@ impl Automation {
             let bytes = std::fs::read(&src).map_err(|e| failed(format!("{}: {e}", src.display())))?;
             let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let stem = src.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into());
-            let id = self.session.open(name, None, Arc::new(bytes), password.as_deref()).map_err(|e| failed(format!("{p}: {e}")))?;
-            let numbered = (|| {
-                let count = self.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
-                for (t, template) in hf.text.iter_mut().zip(&templates) {
-                    *t = pdfcraft_engine::with_bates_start(template, next);
-                }
-                self.session.apply(id, Edit::AddHeaderFooter { pages: (0..count).collect(), settings: hf.clone(), replace })?;
-                Ok::<_, pdfcraft_engine::EditError>((count, self.session.save_bytes(id)?))
-            })();
-            self.session.close(id);
-            let (count, pdf) = numbered.map_err(|e| failed(format!("{p}: {e}")))?;
+            let numbered = self
+                .session
+                .bates_number_file(&name, Arc::new(bytes), password.as_deref(), &hf, next, replace)
+                .map_err(|e| failed(format!("{p}: {e}")))?;
+            let (count, last) = (numbered.pages, numbered.last);
             let target = unused(&dir, &format!("{stem}{suffix}"))?;
-            write_atomic(&target, &pdf)?;
-            let last = next.saturating_add((count as u64).saturating_sub(1));
+            write_atomic(&target, &numbered.bytes)?;
             files.push(json!({ "path": p, "output": target.to_string_lossy(), "pages": count, "first": next, "last": last }));
             next = last.saturating_add(1);
         }

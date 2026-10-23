@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
-use pdfcraft_engine::{Anchor, Arrange, Edit, ObjectIndex, ObjectKind, ObjectSize, ObjectsEdit, PageObject, Paint, PathStyle};
+use pdfcraft_engine::{AlignTo, Anchor, Arrange, Axis, Edit, ObjectIndex, ObjectKind, ObjectSize, ObjectsEdit, PageObject, Paint, PathStyle};
 use pdfcraft_render::DocInfo;
 
 use crate::canvas::{DocView, PageXform};
@@ -166,7 +166,7 @@ impl ObjectView {
     }
 
     /// The edit for `change` on the selection, remembering the selection across an arrange.
-    fn edit(&mut self, change: ObjectsEdit) -> Option<Edit> {
+    pub(crate) fn edit(&mut self, change: ObjectsEdit) -> Option<Edit> {
         if self.selected.is_empty() {
             return None;
         }
@@ -503,15 +503,6 @@ pub(crate) fn page_input(
             }
         }
     }
-    if here && !view.objects.selected.is_empty() {
-        let mut picked = None;
-        resp.context_menu(|ui| {
-            picked = context_menu(ui);
-        });
-        if let Some(change) = picked {
-            view.pending_edit = view.objects.edit(change);
-        }
-    }
     pointer.is_some_and(|p| xf.rect.contains(p) || bounds.is_some_and(|b| b.expand(ROTATE_OFFSET + HANDLE_REACH).contains(p)))
 }
 
@@ -568,8 +559,121 @@ fn anchor_for(xf: &PageXform, b: Rect, h: usize) -> Anchor {
     }
 }
 
-/// The right-click menu on a selection.
-fn context_menu(ui: &mut egui::Ui) -> Option<ObjectsEdit> {
+/// A command id, its translated label and what it does.
+type Labelled<T> = (&'static str, fn() -> &'static str, T);
+
+/// The alignments, in panel order: command id, label and alignment.
+pub(crate) const ALIGNMENTS: [Labelled<AlignTo>; 6] = [
+    ("object.align_left", || tl!("Align left"), AlignTo::Left),
+    ("object.align_center", || tl!("Align horizontal centers"), AlignTo::HorizontalCenter),
+    ("object.align_right", || tl!("Align right"), AlignTo::Right),
+    ("object.align_top", || tl!("Align top"), AlignTo::Top),
+    ("object.align_middle", || tl!("Align vertical centers"), AlignTo::VerticalCenter),
+    ("object.align_bottom", || tl!("Align bottom"), AlignTo::Bottom),
+];
+
+/// The distributions: command id, label and axis.
+pub(crate) const DISTRIBUTIONS: [Labelled<Axis>; 2] = [
+    ("object.distribute_horizontal", || tl!("Distribute horizontally"), Axis::Horizontal),
+    ("object.distribute_vertical", || tl!("Distribute vertically"), Axis::Vertical),
+];
+
+/// The arrangements: command id and arrangement.
+pub(crate) const ARRANGEMENTS: [(&str, Arrange); 4] = [
+    ("object.bring_to_front", Arrange::Front),
+    ("object.bring_forward", Arrange::Forward),
+    ("object.send_backward", Arrange::Backward),
+    ("object.send_to_back", Arrange::Back),
+];
+
+/// The change an `object.*` command makes to the selection.
+pub(crate) fn command_change(id: &str) -> Option<ObjectsEdit> {
+    ALIGNMENTS
+        .iter()
+        .find(|(c, _, _)| *c == id)
+        .map(|(_, _, a)| ObjectsEdit::Align(*a))
+        .or_else(|| DISTRIBUTIONS.iter().find(|(c, _, _)| *c == id).map(|(_, _, a)| ObjectsEdit::Distribute(*a)))
+        .or_else(|| ARRANGEMENTS.iter().find(|(c, _)| *c == id).map(|(_, a)| ObjectsEdit::Arrange(*a)))
+}
+
+/// A small glyph for an alignment or distribution, drawn in code: the line objects line up on
+/// (or the outer edges they keep) and two or three bars.
+fn align_glyph(painter: &egui::Painter, r: Rect, change: &ObjectsEdit, color: Color32) {
+    let s = Stroke::new(1.5, color);
+    let c = r.center();
+    let (l, t, rr, b) = (r.left() + 6.0, r.top() + 6.0, r.right() - 6.0, r.bottom() - 6.0);
+    let bar = |a: Pos2, size: egui::Vec2| painter.rect_filled(Rect::from_min_size(a, size), CornerRadius::same(1), color);
+    match change {
+        ObjectsEdit::Align(a) => {
+            let horizontal = matches!(a, AlignTo::Left | AlignTo::HorizontalCenter | AlignTo::Right);
+            if horizontal {
+                let x = match a {
+                    AlignTo::Left => l,
+                    AlignTo::Right => rr,
+                    _ => c.x,
+                };
+                painter.line_segment([Pos2::new(x, t - 2.0), Pos2::new(x, b + 2.0)], s);
+                for (y, w) in [(t + 1.0, 12.0), (c.y + 2.0, 7.0)] {
+                    let x0 = match a {
+                        AlignTo::Left => x + 2.0,
+                        AlignTo::Right => x - 2.0 - w,
+                        _ => x - w / 2.0,
+                    };
+                    bar(Pos2::new(x0, y), egui::vec2(w, 4.0));
+                }
+            } else {
+                let y = match a {
+                    AlignTo::Top => t,
+                    AlignTo::Bottom => b,
+                    _ => c.y,
+                };
+                painter.line_segment([Pos2::new(l - 2.0, y), Pos2::new(rr + 2.0, y)], s);
+                for (x, h) in [(l + 1.0, 12.0), (c.x + 2.0, 7.0)] {
+                    let y0 = match a {
+                        AlignTo::Top => y + 2.0,
+                        AlignTo::Bottom => y - 2.0 - h,
+                        _ => y - h / 2.0,
+                    };
+                    bar(Pos2::new(x, y0), egui::vec2(4.0, h));
+                }
+            }
+        }
+        ObjectsEdit::Distribute(Axis::Horizontal) => {
+            for x in [l, rr] {
+                painter.line_segment([Pos2::new(x, t - 2.0), Pos2::new(x, b + 2.0)], s);
+            }
+            for x in [l + 2.0, c.x - 1.5, rr - 5.0] {
+                bar(Pos2::new(x, c.y - 4.0), egui::vec2(3.0, 8.0));
+            }
+        }
+        ObjectsEdit::Distribute(Axis::Vertical) => {
+            for y in [t, b] {
+                painter.line_segment([Pos2::new(l - 2.0, y), Pos2::new(rr + 2.0, y)], s);
+            }
+            for y in [t + 2.0, c.y - 1.5, b - 5.0] {
+                bar(Pos2::new(c.x - 4.0, y), egui::vec2(8.0, 3.0));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// A square button showing [`align_glyph`] for `change`, named `label` for screen readers,
+/// automation and its tooltip.
+fn glyph_button(ui: &mut egui::Ui, t: &Tokens, label: &str, enabled: bool, change: &ObjectsEdit) -> egui::Response {
+    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), sense);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, label));
+    if resp.hovered() && enabled {
+        ui.painter().rect_filled(rect, CornerRadius::same(6), t.hover);
+    }
+    align_glyph(ui.painter(), rect.shrink(3.0), change, if enabled { t.text } else { t.text_faint });
+    resp.on_hover_text(label)
+}
+
+/// The right-click menu on a selection of `count` objects. The canvas draws it inside its own
+/// context menu: one popup per response, so the two menus can't fight over it.
+pub(crate) fn context_menu(ui: &mut egui::Ui, count: usize) -> Option<ObjectsEdit> {
     let items: [(&str, ObjectsEdit); 8] = [
         (tl!("Bring to Front"), ObjectsEdit::Arrange(Arrange::Front)),
         (tl!("Bring Forward"), ObjectsEdit::Arrange(Arrange::Forward)),
@@ -583,6 +687,25 @@ fn context_menu(ui: &mut egui::Ui) -> Option<ObjectsEdit> {
     let mut picked = None;
     for (k, (label, change)) in items.into_iter().enumerate() {
         if k == 4 {
+            ui.separator();
+            ui.menu_button(tl!("Align"), |ui| {
+                for (_, label, a) in ALIGNMENTS {
+                    if ui.button(label()).clicked() {
+                        picked = Some(ObjectsEdit::Align(a));
+                        ui.close();
+                    }
+                }
+            });
+            ui.add_enabled_ui(count >= 3, |ui| {
+                ui.menu_button(tl!("Distribute"), |ui| {
+                    for (_, label, axis) in DISTRIBUTIONS {
+                        if ui.button(label()).clicked() {
+                            picked = Some(ObjectsEdit::Distribute(axis));
+                            ui.close();
+                        }
+                    }
+                });
+            });
             ui.separator();
         }
         if ui.button(label).clicked() {
@@ -771,6 +894,26 @@ pub(crate) fn panel(app: &mut crate::PdfCraftApp, ui: &mut egui::Ui, t: &Tokens)
             }
         }
     });
+    ui.label(egui::RichText::new(if count == 1 { tl!("Align to the page") } else { tl!("Align and distribute") }).small().color(t.text_muted));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for (_, label, a) in ALIGNMENTS {
+            let c = ObjectsEdit::Align(a);
+            if glyph_button(ui, t, label(), true, &c).clicked() {
+                change = Some(c);
+            }
+        }
+        ui.add_space(6.0);
+        for (_, label, axis) in DISTRIBUTIONS {
+            let c = ObjectsEdit::Distribute(axis);
+            let r = glyph_button(ui, t, label(), count >= 3, &c);
+            if count < 3 {
+                r.on_hover_text(tl!("Select three or more objects to distribute them"));
+            } else if r.clicked() {
+                change = Some(c);
+            }
+        }
+    });
     ui.horizontal(|ui| {
         let buttons: [(&str, &str, ObjectsEdit); 3] = [
             ("rotate-cw", tl!("Rotate Clockwise"), ObjectsEdit::Rotate(1)),
@@ -836,6 +979,35 @@ pub(crate) fn panel(app: &mut crate::PdfCraftApp, ui: &mut egui::Ui, t: &Tokens)
         && let Some(edit) = view.objects.edit(c)
     {
         app.apply_edit(edit);
+    }
+}
+
+impl crate::PdfCraftApp {
+    /// An `object.*` command (arrange, align, distribute) on the Edit objects selection.
+    pub(crate) fn object_command(&mut self, id: &str) {
+        let Some(change) = command_change(id) else { return };
+        let Some((index, doc_id)) = self.active_ids() else { return };
+        let selected = match (self.quick_tool == crate::QuickTool::EditObject, self.session.get(doc_id), self.views.get_mut(index)) {
+            (true, Some(doc), Some(view)) => {
+                view.objects.sync(doc);
+                // The selection's objects are indexed before an arrange remembers them.
+                let page = view.objects.page;
+                let _ = view.objects.objects(doc, page);
+                view.objects.selected.len()
+            }
+            _ => 0,
+        };
+        if selected == 0 {
+            self.notify_tr("Select objects with Edit objects first");
+            return;
+        }
+        if matches!(change, ObjectsEdit::Distribute(_)) && selected < 3 {
+            self.notify_tr("Select three or more objects to distribute them");
+            return;
+        }
+        if let Some(edit) = self.views.get_mut(index).and_then(|v| v.objects.edit(change)) {
+            self.apply_edit(edit);
+        }
     }
 }
 

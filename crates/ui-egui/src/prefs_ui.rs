@@ -98,7 +98,13 @@ impl Page {
     pub fn rows(self) -> &'static [&'static str] {
         match self {
             Page::General => &["general.language", "general.theme", "general.default_mode", "general.reopen_last_session", "general.check_updates"],
-            Page::Documents => &["documents.autosave_minutes", "documents.recent_files", "documents.default_layout", "documents.default_zoom"],
+            Page::Documents => &[
+                "documents.autosave_minutes",
+                "documents.recent_files",
+                "documents.default_layout",
+                "documents.default_zoom",
+                "documents.keep_tags_on_edit",
+            ],
             Page::Commenting => &["commenting.keep_tool_selected", "commenting.open_panel"],
             Page::Forms => {
                 &["forms.highlight_fields", "forms.highlight_color", "forms.required_color", "forms.flatten_fill_sign", "forms.date_format"]
@@ -158,6 +164,7 @@ fn label(key: &str) -> &'static str {
         "documents.recent_files" => tl!("Recent files to remember"),
         "documents.default_layout" => tl!("Default page display"),
         "documents.default_zoom" => tl!("Default zoom"),
+        "documents.keep_tags_on_edit" => tl!("Keep structure tags when editing content"),
         "commenting.keep_tool_selected" => tl!("Keep the comment tool selected after adding a comment"),
         "commenting.open_panel" => tl!("Open the Comments panel when a comment tool is chosen"),
         "forms.highlight_fields" => tl!("Highlight form fields in documents that open"),
@@ -201,6 +208,7 @@ fn keywords(key: &str) -> &'static str {
         "documents.recent_files" => "recent files history list count",
         "documents.default_layout" => "page display layout continuous single two-up",
         "documents.default_zoom" => "zoom magnification fit width page",
+        "documents.keep_tags_on_edit" => "tags structure tagged accessibility edit editing keep reading order",
         "commenting.keep_tool_selected" => "comment tool pin sticky",
         "commenting.open_panel" => "comments panel list sidebar",
         "forms.highlight_fields" => "form fields highlight",
@@ -702,6 +710,9 @@ fn row(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static str) 
                 ui.radio_value(&mut app.view_defaults.layout, l, tl!(l.label()));
             }
         }),
+        "documents.keep_tags_on_edit" => {
+            check(ui, app, t, key, Some(tl!("Edited, added and deleted text and images update a tagged document's structure in the same undo step.")))
+        }
         "documents.default_zoom" => setting(
             ui,
             t,

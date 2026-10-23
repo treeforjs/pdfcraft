@@ -2729,3 +2729,51 @@ compare-page	Moved	Movida
 	Change reading order	Alterar a ordem de leitura
 	Change tag properties	Alterar as propriedades da tag
 	Tag region	Marcar região
+	Add files to number	Adicionar arquivos para numerar
+	Align and distribute	Alinhar e distribuir
+	Align bottom	Alinhar embaixo
+	Align horizontal centers	Centralizar horizontalmente
+	Align to the page	Alinhar à página
+	Align top	Alinhar em cima
+	Align vertical centers	Centralizar verticalmente
+	Bates Number Options	Opções de numeração Bates
+	Bates numbering… file {d} of {t}	Numeração Bates… arquivo {d} de {t}
+	Bulleted list	Lista com marcadores
+	Choose a destination	Escolher um destino
+	Choose a folder for the numbered files	Escolher uma pasta para os arquivos numerados
+	Custom view ({kind})	Exibição personalizada ({kind})
+	Custom view ({zoom}%)	Exibição personalizada ({zoom}%)
+	Distribute horizontally	Distribuir horizontalmente
+	Distribute vertically	Distribuir verticalmente
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Texto e imagens editados, adicionados e excluídos atualizam a estrutura de um documento com tags na mesma etapa de desfazer.
+	File name suffix	Sufixo do nome do arquivo
+	Fit height	Ajustar altura
+	Fit page	Página inteira
+	Go to a named destination	Ir para um destino nomeado
+	Go to the page as it is shown now: its position and zoom	Ir para a página como é exibida agora: posição e zoom
+	Horizontal offset	Deslocamento horizontal
+	Indent list	Aumentar recuo da lista
+	Inherit zoom	Herdar zoom
+	Keep structure tags when editing content	Manter as tags de estrutura ao editar o conteúdo
+	Number of digits	Número de dígitos
+	Numbered list	Lista numerada
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{done} de {total} arquivos numerados; não foi possível numerar {name}: {e}
+	Numbered {n} more files, up to {last}	Mais {n} arquivos numerados, até {last}
+	Outdent list	Diminuir recuo da lista
+	Remove list	Remover lista
+	Select three or more objects to distribute them	Selecione três ou mais objetos para distribuí-los
+	Show when displaying on screen	Mostrar na tela
+	Show when printing	Mostrar ao imprimir
+	Space after paragraphs	Espaço após os parágrafos
+	Start number	Número inicial
+	Suffix	Sufixo
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	A numeração continua nesses arquivos, em ordem. Cada um recebe uma cópia numerada em uma pasta escolhida por você; os arquivos em si ficam como estão.
+	This document has no named destinations.	Este documento não tem destinos nomeados.
+	Use current view	Usar a exibição atual
+	Vertical offset	Deslocamento vertical
+	Bates numbering of other files couldn't start; try again	Não foi possível iniciar a numeração Bates de outros arquivos; tente novamente
+	Bates numbering of other files is already running	A numeração Bates de outros arquivos já está em andamento
+	That's as many files as one Bates numbering run takes	Uma numeração Bates não aceita mais arquivos
+	Numbering other files arrives on the web with folder pickers	A numeração de outros arquivos chegará à web com seletores de pasta
+	Select objects with Edit objects first	Selecione primeiro objetos com Editar objetos
+	Select a text box, or click into a paragraph, first	Selecione primeiro uma caixa de texto ou clique em um parágrafo

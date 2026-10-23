@@ -7151,3 +7151,51 @@ fn windows_through_tools() {
     ok(&mut a, "doc_close", json!({ "doc": db }));
     assert_eq!(ok(&mut a, "window_list", json!({}))["windows"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn watermarks_move_and_show_only_when_printing_or_on_screen() {
+    let dir = workdir("wm-visibility");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_watermark", json!({ "doc": doc, "pages": [1], "text": "SCREENONLY", "show_on_print": false, "offset_x": 30, "offset_y": -40 }));
+    ok(&mut a, "doc_watermark", json!({ "doc": doc, "pages": [1], "text": "PRINTONLY", "show_on_screen": false }));
+    let texts = page_text(&mut a, doc);
+    assert!(texts[0].contains("SCREENONLY") && !texts[0].contains("PRINTONLY"), "the print-only one is hidden on screen: {texts:?}");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "wm.pdf" }));
+    let saved = ok(&mut a, "doc_open", json!({ "path": "wm.pdf" }))["doc"].as_u64().unwrap();
+    let t = page_text(&mut a, saved);
+    assert!(t[0].contains("SCREENONLY") && !t[0].contains("PRINTONLY"), "saved as optional content: {t:?}");
+    // Printing drops the screen-only watermark and keeps the print-only one.
+    ok(&mut a, "doc_print", json!({ "doc": doc, "pages": "1", "path": "printed.pdf" }));
+    let printed = ok(&mut a, "doc_open", json!({ "path": "printed.pdf" }))["doc"].as_u64().unwrap();
+    let t = page_text(&mut a, printed);
+    assert!(t[0].contains("PRINTONLY") && !t[0].contains("SCREENONLY"), "{t:?}");
+    // One undo step each.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "doc_print", json!({ "doc": doc, "pages": "1", "path": "printed2.pdf" }));
+    let printed = ok(&mut a, "doc_open", json!({ "path": "printed2.pdf" }))["doc"].as_u64().unwrap();
+    assert!(!page_text(&mut a, printed)[0].contains("PRINTONLY"), "undone");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hostile_watermark_appearance_is_refused() {
+    let dir = workdir("wm-hostile");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for extra in [
+        json!({ "show_on_print": false, "show_on_screen": false }),
+        json!({ "offset_x": 1e9 }),
+        json!({ "offset_y": -1e300 }),
+        json!({ "offset_x": "left" }),
+        json!({ "show_on_print": "no" }),
+    ] {
+        let mut args = json!({ "doc": doc, "text": "X" });
+        for (k, v) in extra.as_object().unwrap() {
+            args[k] = v.clone();
+        }
+        assert!(a.call("doc_watermark", &args).is_err(), "{args}");
+    }
+    assert!(!page_text(&mut a, doc)[0].contains('X'), "nothing was added");
+    let _ = std::fs::remove_dir_all(&dir);
+}

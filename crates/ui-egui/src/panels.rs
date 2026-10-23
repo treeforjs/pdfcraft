@@ -318,6 +318,22 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
             changed = true;
         }
         changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras);
+        // A paragraph made a list moves into a list text box drawn where it was.
+        if let Some(change) = crate::content_ui::list_panel(ui, t, None) {
+            let edit = pdfcraft_engine::Edit::EditList {
+                page: ed.page,
+                target: pdfcraft_engine::ListTarget::Paragraphs { first: ed.block, count: 1 },
+                change,
+            };
+            if app.apply_edit(edit)
+                && let Some(v) = app.views.get_mut(i)
+            {
+                v.line_editor = None;
+            }
+            ui.add_space(6.0);
+            ui.separator();
+            return;
+        }
         ui.label(tl!("Fonts"));
         egui::ComboBox::from_id_salt("existing-page-font").selected_text(&ed.source_font).width(180.0).show_ui(ui, |ui| {
             if let Some(doc) = app.session.get(app.views[i].id) {
@@ -389,14 +405,27 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
     });
     match selected {
         Some((page, index, text)) => {
-            if let Some(style) = crate::content_ui::format_panel(ui, t, &text) {
-                app.text_style = pdfcraft_engine::AddedText { text: String::new(), rect: [0.0; 4], ..style.clone() };
+            let looked = crate::content_ui::format_panel(ui, t, &text);
+            let spaced = crate::content_ui::spacing_panel(ui, t, looked.as_ref().unwrap_or(&text));
+            let listed = crate::content_ui::list_panel(ui, t, Some(&text));
+            if let Some(style) = spaced.or(looked) {
+                // New text takes the look, not the list.
+                app.text_style = pdfcraft_engine::AddedText { text: String::new(), rect: [0.0; 4], list: Vec::new(), ..style.clone() };
                 app.apply_edit(pdfcraft_engine::Edit::UpdateContent { page, index, content: pdfcraft_engine::AddedContent::Text(style) });
+            } else if let Some(change) = listed {
+                app.apply_edit(pdfcraft_engine::Edit::EditList {
+                    page,
+                    target: pdfcraft_engine::ListTarget::Added { index, paragraphs: None },
+                    change,
+                });
             }
         }
         None if app.quick_tool == crate::QuickTool::AddText => {
             crate::content_ui::hint(ui, t);
             if let Some(style) = crate::content_ui::format_panel(ui, t, &app.text_style) {
+                app.text_style = style;
+            }
+            if let Some(style) = crate::content_ui::spacing_panel(ui, t, &app.text_style) {
                 app.text_style = style;
             }
         }

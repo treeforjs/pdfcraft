@@ -118,3 +118,130 @@ fn bates_numbering_is_removed_on_its_own() {
     let s = h.state();
     assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Remove Bates numbering"));
 }
+
+#[test]
+fn watermarks_take_a_position_and_show_only_in_print_or_on_screen() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("edit.watermark"));
+    h.run_steps(2);
+    h.state_mut().marks_draft.wm.text = "DRAFT".into();
+    h.run_steps(2);
+    h.get_by_label("Show when printing");
+    // Untick on screen: print only. Unticking print too ticks screen back on (never neither).
+    h.get_by_label("Show when displaying on screen").click();
+    h.run_steps(2);
+    assert_eq!(h.state().marks_draft.wm.visibility, pdfcraft_engine::MarkVisibility::PrintOnly);
+    h.get_by_label("Show when printing").click();
+    h.run_steps(2);
+    assert_eq!(h.state().marks_draft.wm.visibility, pdfcraft_engine::MarkVisibility::ScreenOnly);
+    h.get_by_label("Show when displaying on screen").click();
+    h.run_steps(2);
+    assert_eq!(h.state().marks_draft.wm.visibility, pdfcraft_engine::MarkVisibility::PrintOnly);
+    // An offset shows Center, which puts it back.
+    h.state_mut().marks_draft.wm.offset = [40.0, -25.0];
+    h.run_steps(2);
+    h.get_by_label("Center").click();
+    h.run_steps(2);
+    assert_eq!(h.state().marks_draft.wm.offset, [0.0, 0.0]);
+    h.state_mut().marks_draft.wm.offset = [40.0, -25.0];
+    h.state_mut().marks_draft.wm.scale = 0.3;
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), [MarkKind::Watermark]);
+    // Print only: hidden on screen, so the page shows (and its text has) no DRAFT.
+    let bytes = {
+        let s = h.state();
+        s.session.get(s.views[0].id).unwrap().bytes.clone()
+    };
+    let mut r = pdfcraft_render::PageRenderer::new(bytes, Default::default());
+    let out = r.render(pdfcraft_render::RenderRequest { page: 0, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
+    let text = out.text.map(|t| t.plain_text()).unwrap_or_default();
+    assert!(!text.contains("DRAFT"), "{text}");
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Add watermark"));
+}
+
+#[test]
+fn hostile_watermark_positions_are_kept_in_range() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("edit.watermark"));
+    h.run_steps(2);
+    h.state_mut().marks_draft.wm.text = "DRAFT".into();
+    h.state_mut().marks_draft.wm.offset = [f64::NAN, 1e12];
+    h.run_steps(2);
+    // The dialog's fields keep it in range before it reaches the page.
+    let [x, y] = h.state().marks_draft.wm.offset;
+    assert!(x.is_finite() && y.is_finite() && x.abs() <= pdfcraft_engine::MAX_MARK_OFFSET && y <= pdfcraft_engine::MAX_MARK_OFFSET, "{x} {y}");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), [MarkKind::Watermark]);
+}
+
+fn out_dir(test: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("pdfcraft-bates-ui-{test}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn bates_numbering_takes_options_and_continues_into_other_files() {
+    let dir = out_dir("files");
+    let mut h = harness();
+    h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
+    h.state_mut().run_inline = true;
+    assert!(h.state_mut().execute("edit.bates"));
+    h.run_steps(3);
+    h.get_by_label("Bates Number Options");
+    // A prefix typed into its box goes into the token.
+    h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Prefix").click();
+    h.run_steps(2);
+    h.event(egui::Event::Text("ACME-".into()));
+    h.run_steps(3);
+    assert_eq!(h.state().marks_draft.hf.text[5], "<<Bates Number#6#1#ACME-#>>");
+    // Two more files, then one removed and added again.
+    h.state_mut().add_bates_file("second.pdf".into(), FIXTURE.to_vec());
+    h.state_mut().add_bates_file("third.pdf".into(), FIXTURE.to_vec());
+    h.run_steps(2);
+    h.get_by_label("Remove third.pdf").click();
+    h.run_steps(2);
+    assert_eq!(h.state().marks_draft.bates_files.len(), 1);
+    h.state_mut().add_bates_file("third.pdf".into(), FIXTURE.to_vec());
+    h.run_steps(2);
+    h.get_by_label("File name suffix");
+    h.get_by_label("OK").click();
+    h.run_steps(4);
+    assert_eq!(marks(&h), [MarkKind::Bates]);
+    // The open document has 1–3; the files 4–6 and 7–9, each a copy in the folder.
+    assert_eq!(h.state().toast.clone().unwrap().0, "Numbered 2 more files, up to 9");
+    for (name, first) in [("second_bates.pdf", "ACME-000004"), ("third_bates.pdf", "ACME-000007")] {
+        let bytes = std::fs::read(dir.join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let mut s = pdfcraft_engine::Session::new();
+        let id = s.open(name, None, std::sync::Arc::new(bytes), None).unwrap();
+        let text: String = s.get(id).unwrap().text_lines(0).iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n");
+        assert!(text.contains(first), "{name}: {text}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_broken_file_stops_bates_numbering_with_a_message() {
+    let dir = out_dir("broken");
+    let mut h = harness();
+    h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
+    h.state_mut().run_inline = true;
+    assert!(h.state_mut().execute("edit.bates"));
+    h.run_steps(3);
+    h.state_mut().add_bates_file("junk.pdf".into(), b"%PDF-1.7\nnot really".to_vec());
+    h.state_mut().add_bates_file("fine.pdf".into(), FIXTURE.to_vec());
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(4);
+    let toast = h.state().toast.clone().unwrap().0;
+    assert!(toast.starts_with("Numbered 0 of 2 files; junk.pdf couldn't be numbered"), "{toast}");
+    assert!(!dir.join("fine_bates.pdf").exists(), "the numbers stay unbroken");
+    // The open document was still numbered.
+    assert_eq!(marks(&h), [MarkKind::Bates]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

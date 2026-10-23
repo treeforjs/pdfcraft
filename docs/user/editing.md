@@ -32,7 +32,7 @@ Added text uses the standard fonts, which cover Western European languages. Othe
 - Drag to move, drag a handle to resize, and change the colour of shapes.
 - The arrow keys nudge the selection by one point; hold ⇧ to move it by ten.
 - ⌘] brings it forward and ⌘[ sends it backward; add ⇧ to bring it to the front or send it to the back.
-- Align and distribute several selected objects from the toolbar.
+- Align and distribute the selection from the Edit panel or the right-click menu. One object aligns to the page; distributing needs three or more.
 - Delete removes the selection.
 
 ## Links
