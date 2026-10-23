@@ -1585,6 +1585,8 @@ pub enum OrderPlace {
     Before(ObjRef),
     /// Just after this element, among its siblings.
     After(ObjRef),
+    /// Inside this element, as its last kid (an empty element too).
+    Into(ObjRef),
 }
 
 /// Order panel: move an element (with everything inside it) to just before or after another,
@@ -1599,12 +1601,13 @@ pub fn move_element(doc: &mut Document, element: ObjRef, place: OrderPlace) -> R
         return Err(invalid("the structure tree is too large or too deeply nested to edit safely"));
     }
     let root = root_ref(doc)?;
-    let (target, after) = match place {
-        OrderPlace::Before(t) => (t, false),
-        OrderPlace::After(t) => (t, true),
+    let (target, after, into) = match place {
+        OrderPlace::Before(t) => (t, false, false),
+        OrderPlace::After(t) => (t, true, false),
+        OrderPlace::Into(t) => (t, true, true),
     };
     if target == element {
-        return Err(invalid("an element can't be moved before or after itself"));
+        return Err(invalid(if into { "an element can't be moved into itself" } else { "an element can't be moved before or after itself" }));
     }
     let e = tree.find(element).ok_or(TagError::NotAnElement(element.num))?;
     let t = tree.find(target).ok_or(TagError::NotAnElement(target.num))?;
@@ -1613,8 +1616,12 @@ pub fn move_element(doc: &mut Document, element: ObjRef, place: OrderPlace) -> R
     }
     let from = parent_obj(&tree, e)
         .ok_or_else(|| invalid(format!("element {}'s parent is written inside its own parent and can't be edited", element.num)))?;
-    let to = parent_obj(&tree, t)
-        .ok_or_else(|| invalid(format!("element {}'s parent is written inside its own parent and can't be edited", target.num)))?;
+    let to = if into {
+        Some(target)
+    } else {
+        parent_obj(&tree, t)
+            .ok_or_else(|| invalid(format!("element {}'s parent is written inside its own parent and can't be edited", target.num)))?
+    };
     let mut work = doc.clone();
     let holder = from.unwrap_or(root);
     let d = work.get(holder).as_dict().cloned().ok_or_else(|| invalid("a structure element is not a dictionary"))?;
@@ -1624,13 +1631,13 @@ pub fn move_element(doc: &mut Document, element: ObjRef, place: OrderPlace) -> R
         return Err(invalid(format!("element {} is not listed in its parent's kids; it can't be moved", element.num)));
     }
     work.update_dict(holder, |d| d.set(b"K".to_vec(), Object::Array(keep)))?;
-    let into = to.unwrap_or(root);
-    let d = work.get(into).as_dict().cloned().ok_or_else(|| invalid("a structure element is not a dictionary"))?;
-    if !kid_list(&work, &d).iter().any(|k| k.as_ref() == Some(target)) {
+    let holder_to = to.unwrap_or(root);
+    let d = work.get(holder_to).as_dict().cloned().ok_or_else(|| invalid("a structure element is not a dictionary"))?;
+    if !into && !kid_list(&work, &d).iter().any(|k| k.as_ref() == Some(target)) {
         return Err(invalid(format!("element {} is not listed in its parent's kids; nothing can be moved next to it", target.num)));
     }
-    insert_kid(&mut work, root, to, Some(target), after, element)?;
-    work.update_dict(element, |d| d.set(b"P".to_vec(), Object::Ref(into)))?;
+    insert_kid(&mut work, root, to, if into { None } else { Some(target) }, after, element)?;
+    work.update_dict(element, |d| d.set(b"P".to_vec(), Object::Ref(holder_to)))?;
     *doc = work;
     Ok(())
 }

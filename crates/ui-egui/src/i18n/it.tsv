@@ -2645,3 +2645,95 @@ compare-page	Moved	Spostata
 	embedded	incorporato
 	not embedded	non incorporato
 	{n} of the page is over the limit	{n} della pagina supera il limite
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Contenuto contrassegnato {mcid} a pagina {page}
+	Marked content {mcid}	Contenuto contrassegnato {mcid}
+	Object	Oggetto
+	Annotation: {kind}	Annotazione: {kind}
+	This document has no tags.	Questo documento non ha tag.
+	Tags tell screen readers what each part of the page is and in which order to read it.	I tag indicano agli screen reader cos’è ogni parte della pagina e in che ordine leggerla.
+	Autotag document	Applica tag automaticamente al documento
+	Reading order tool	Strumento Ordine di lettura
+	New tag…	Nuovo tag…
+	Tag properties…	Proprietà del tag…
+	Change to artifact	Cambia in artefatto
+	Delete tag	Elimina tag
+	Collapse all tags	Comprimi tutti i tag
+	Expand all tags	Espandi tutti i tag
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Questo albero della struttura è molto grande: ne viene mostrata solo una parte e non può essere modificato.
+	Collapse some tags to see the rest.	Comprimi alcuni tag per vedere il resto.
+	Clear page structure	Cancella la struttura della pagina
+	Nothing on this page is tagged yet.	Su questa pagina non c’è ancora nulla con tag.
+	Use the Reading order tool: draw a box around content and choose what it is.	Usa lo strumento Ordine di lettura: disegna un riquadro attorno al contenuto e scegli che cos’è.
+	{n} drawing operations on this page are not tagged.	{n} operazioni di disegno in questa pagina non hanno tag.
+	Tag properties	Proprietà del tag
+	What a figure or formula shows	Che cosa mostra una figura o una formula
+	Actual text	Testo effettivo
+	The exact text the content spells	Il testo esatto che il contenuto rappresenta
+	Alternate and actual text replace everything inside the tag for screen readers.	Il testo alternativo e il testo effettivo sostituiscono tutto il contenuto del tag per gli screen reader.
+	New tag	Nuovo tag
+	Drag tags onto the new tag to move them inside it.	Trascina i tag sul nuovo tag per spostarli al suo interno.
+	Add tag	Aggiungi tag
+	Inside {tag}	All’interno di {tag}
+	At the top level	Al livello superiore
+	Draw a box around content, then choose what it is.	Disegna un riquadro attorno al contenuto, poi scegli che cos’è.
+	Tag this area as	Applica a quest’area il tag
+	Alternate text (figures and formulas)	Testo alternativo (figure e formule)
+	Autotag form fields	Applica tag automaticamente ai campi modulo
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft legge il layout di ogni pagina e applica i tag a titoli, paragrafi, elenchi, tabelle, figure, collegamenti e campi modulo in ordine di lettura.
+	Find tables	Trova tabelle
+	Find lists	Trova elenchi
+	Tag form fields	Applica tag ai campi modulo
+	Give fields without a tooltip one from their label	Assegna ai campi senza descrizione comando una tratta dalla loro etichetta
+	This document is already tagged. Autotagging replaces all of its tags.	Questo documento ha già i tag. L’applicazione automatica sostituisce tutti i suoi tag.
+	Replace the existing tags	Sostituisci i tag esistenti
+	Autotag	Applica tag
+	Autotag finished	Applicazione automatica dei tag completata
+	{n} tags on {p} pages.	{n} tag su {p} pagine.
+	{n} figures need alternate text.	{n} figure richiedono un testo alternativo.
+	{n} form fields have no tooltip.	{n} campi modulo non hanno una descrizione comando.
+	Check the reading order of each page with the Order panel.	Controlla l’ordine di lettura di ogni pagina con il pannello Ordine.
+	Show tags	Mostra tag
+	Results	Risultati
+	Screen readers announce the title and read the text in the document's language.	Gli screen reader annunciano il titolo e leggono il testo nella lingua del documento.
+	Tag the document again (replaces its tags)	Applica di nuovo i tag al documento (sostituisce i suoi tag)
+	Tag the document	Applica i tag al documento
+	Next	Avanti
+	Give the document's language as a language tag, such as en-US.	Indica la lingua del documento come codice lingua, ad esempio en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Gli screen reader leggono la descrizione comando di un campo per dire cosa inserire. Controllale tutte.
+	Figure {i} of {n}	Figura {i} di {n}
+	Finish	Fine
+	Undo takes back the whole action in one step.	Annulla ripristina l’intera azione in un solo passaggio.
+	Show checker results	Mostra i risultati del controllo
+	skipped	saltato
+	{n} set	{n} impostati
+	structure order	ordine della struttura
+	no figures	nessuna figura
+	Tags	Tag
+	Order	Ordine
+	Heading 1	Titolo 1
+	Heading 2	Titolo 2
+	Heading 3	Titolo 3
+	Heading 4	Titolo 4
+	Heading 5	Titolo 5
+	Heading 6	Titolo 6
+	Figure	Figura
+	Figure with caption	Figura con didascalia
+	Table cell	Cella di tabella
+	Formula	Formula
+	Form field	Campo modulo
+	Artifact: header	Artefatto: intestazione
+	Artifact: footer	Artefatto: piè di pagina
+	Artifact: background	Artefatto: sfondo
+	Form field tooltips	Descrizioni comandi dei campi modulo
+	Paragraphs	Paragrafi
+	Figures	Figure
+	Tags panel	Pannello Tag
+	Order panel	Pannello Ordine
+	Autotag document…	Applica tag automaticamente al documento…
+	Autotag form fields…	Applica tag automaticamente ai campi modulo…
+	Make accessible…	Rendi accessibile…
+	Change reading order	Modifica l’ordine di lettura
+	Change tag properties	Modifica le proprietà del tag
+	Tag region	Applica tag all’area

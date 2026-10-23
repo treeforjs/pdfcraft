@@ -119,9 +119,21 @@ impl Automation {
         let before = obj_arg(a, "before")?;
         let after = obj_arg(a, "after")?;
         let to = a.opt_int("to")?;
-        let given = usize::from(before.is_some()) + usize::from(after.is_some()) + usize::from(to.is_some());
+        let into = obj_arg(a, "into")?;
+        let given = usize::from(before.is_some()) + usize::from(after.is_some()) + usize::from(to.is_some()) + usize::from(into.is_some());
         if given != 1 {
-            return Err(ToolError::InvalidArgs("give exactly one of before (an obj), after (an obj), or to (a region number on page)".into()));
+            return Err(ToolError::InvalidArgs(
+                "give exactly one of before (an obj), after (an obj), into (an obj), or to (a region number on page)".into(),
+            ));
+        }
+        if let Some(target) = into {
+            let id = self.doc(a)?.id;
+            self.session.apply(id, pdfcraft_engine::Edit::MoveTagInto { element, target }).map_err(failed)?;
+            let order = match a.get("page") {
+                Some(_) => Some(order_json(&self.doc(a)?.reading_order(self.page(a)?).map_err(failed)?)),
+                None => None,
+            };
+            return Ok(json!({ "moved": true, "element": element, "into": target, "order": order }));
         }
         let (target, after_it) = match (before, after, to) {
             (Some(t), _, _) => (t, false),

@@ -2636,3 +2636,95 @@ compare-page	Moved	Déplacée
 	embedded	incorporée
 	not embedded	non incorporée
 	{n} of the page is over the limit	{n} de la page dépasse la limite
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Contenu marqué {mcid} à la page {page}
+	Marked content {mcid}	Contenu marqué {mcid}
+	Object	Objet
+	Annotation: {kind}	Annotation : {kind}
+	This document has no tags.	Ce document n’a pas de balises.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Les balises indiquent aux lecteurs d’écran ce qu’est chaque partie de la page et dans quel ordre la lire.
+	Autotag document	Baliser automatiquement le document
+	Reading order tool	Outil Ordre de lecture
+	New tag…	Nouvelle balise…
+	Tag properties…	Propriétés de la balise…
+	Change to artifact	Changer en artefact
+	Delete tag	Supprimer la balise
+	Collapse all tags	Réduire toutes les balises
+	Expand all tags	Développer toutes les balises
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Cette arborescence de structure est très grande : seule une partie est affichée et elle ne peut pas être modifiée.
+	Collapse some tags to see the rest.	Réduisez certaines balises pour voir le reste.
+	Clear page structure	Effacer la structure de la page
+	Nothing on this page is tagged yet.	Rien n’est encore balisé sur cette page.
+	Use the Reading order tool: draw a box around content and choose what it is.	Utilisez l’outil Ordre de lecture : tracez un cadre autour du contenu et choisissez ce que c’est.
+	{n} drawing operations on this page are not tagged.	{n} opérations de dessin de cette page ne sont pas balisées.
+	Tag properties	Propriétés de la balise
+	What a figure or formula shows	Ce que montre une figure ou une formule
+	Actual text	Texte réel
+	The exact text the content spells	Le texte exact que forme le contenu
+	Alternate and actual text replace everything inside the tag for screen readers.	Le texte de remplacement et le texte réel remplacent tout le contenu de la balise pour les lecteurs d’écran.
+	New tag	Nouvelle balise
+	Drag tags onto the new tag to move them inside it.	Faites glisser des balises sur la nouvelle balise pour les y placer.
+	Add tag	Ajouter la balise
+	Inside {tag}	Dans {tag}
+	At the top level	Au niveau supérieur
+	Draw a box around content, then choose what it is.	Tracez un cadre autour du contenu, puis choisissez ce que c’est.
+	Tag this area as	Baliser cette zone comme
+	Alternate text (figures and formulas)	Texte de remplacement (figures et formules)
+	Autotag form fields	Baliser automatiquement les champs de formulaire
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft lit la mise en page de chaque page et balise les titres, paragraphes, listes, tableaux, figures, liens et champs de formulaire dans l’ordre de lecture.
+	Find tables	Détecter les tableaux
+	Find lists	Détecter les listes
+	Tag form fields	Baliser les champs de formulaire
+	Give fields without a tooltip one from their label	Donner aux champs sans info-bulle une info-bulle tirée de leur libellé
+	This document is already tagged. Autotagging replaces all of its tags.	Ce document est déjà balisé. Le balisage automatique remplace toutes ses balises.
+	Replace the existing tags	Remplacer les balises existantes
+	Autotag	Baliser
+	Autotag finished	Balisage automatique terminé
+	{n} tags on {p} pages.	{n} balises sur {p} pages.
+	{n} figures need alternate text.	{n} figures ont besoin d’un texte de remplacement.
+	{n} form fields have no tooltip.	{n} champs de formulaire n’ont pas d’info-bulle.
+	Check the reading order of each page with the Order panel.	Vérifiez l’ordre de lecture de chaque page dans le panneau Ordre.
+	Show tags	Afficher les balises
+	Results	Résultats
+	Screen readers announce the title and read the text in the document's language.	Les lecteurs d’écran annoncent le titre et lisent le texte dans la langue du document.
+	Tag the document again (replaces its tags)	Baliser à nouveau le document (remplace ses balises)
+	Tag the document	Baliser le document
+	Next	Suivant
+	Give the document's language as a language tag, such as en-US.	Indiquez la langue du document sous forme de code de langue, par exemple en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Les lecteurs d’écran lisent l’info-bulle d’un champ pour indiquer quoi saisir. Vérifiez chacune.
+	Figure {i} of {n}	Figure {i} sur {n}
+	Finish	Terminer
+	Undo takes back the whole action in one step.	Annuler revient sur toute l’action en une seule étape.
+	Show checker results	Afficher les résultats du vérificateur
+	skipped	ignoré
+	{n} set	{n} définis
+	structure order	ordre de la structure
+	no figures	aucune figure
+	Tags	Balises
+	Order	Ordre
+	Heading 1	Titre 1
+	Heading 2	Titre 2
+	Heading 3	Titre 3
+	Heading 4	Titre 4
+	Heading 5	Titre 5
+	Heading 6	Titre 6
+	Figure	Figure
+	Figure with caption	Figure avec légende
+	Table cell	Cellule de tableau
+	Formula	Formule
+	Form field	Champ de formulaire
+	Artifact: header	Artefact : en-tête
+	Artifact: footer	Artefact : pied de page
+	Artifact: background	Artefact : arrière-plan
+	Form field tooltips	Info-bulles des champs de formulaire
+	Paragraphs	Paragraphes
+	Figures	Figures
+	Tags panel	Panneau Balises
+	Order panel	Panneau Ordre
+	Autotag document…	Baliser automatiquement le document…
+	Autotag form fields…	Baliser automatiquement les champs de formulaire…
+	Make accessible…	Rendre accessible…
+	Change reading order	Modifier l’ordre de lecture
+	Change tag properties	Modifier les propriétés de la balise
+	Tag region	Baliser la zone

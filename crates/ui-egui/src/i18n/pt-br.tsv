@@ -2637,3 +2637,95 @@ compare-page	Moved	Movida
 	embedded	incorporada
 	not embedded	não incorporada
 	{n} of the page is over the limit	{n} da página está acima do limite
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Conteúdo marcado {mcid} na página {page}
+	Marked content {mcid}	Conteúdo marcado {mcid}
+	Object	Objeto
+	Annotation: {kind}	Anotação: {kind}
+	This document has no tags.	Este documento não tem tags.
+	Tags tell screen readers what each part of the page is and in which order to read it.	As tags dizem aos leitores de tela o que é cada parte da página e em que ordem lê-la.
+	Autotag document	Marcar documento automaticamente
+	Reading order tool	Ferramenta de ordem de leitura
+	New tag…	Nova tag…
+	Tag properties…	Propriedades da tag…
+	Change to artifact	Alterar para artefato
+	Delete tag	Excluir tag
+	Collapse all tags	Recolher todas as tags
+	Expand all tags	Expandir todas as tags
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Esta árvore de estrutura é muito grande: só uma parte é mostrada e ela não pode ser editada.
+	Collapse some tags to see the rest.	Recolha algumas tags para ver o restante.
+	Clear page structure	Limpar a estrutura da página
+	Nothing on this page is tagged yet.	Nada nesta página está marcado ainda.
+	Use the Reading order tool: draw a box around content and choose what it is.	Use a ferramenta de ordem de leitura: desenhe uma caixa em volta do conteúdo e escolha o que ele é.
+	{n} drawing operations on this page are not tagged.	{n} operações de desenho nesta página não estão marcadas.
+	Tag properties	Propriedades da tag
+	What a figure or formula shows	O que uma figura ou fórmula mostra
+	Actual text	Texto real
+	The exact text the content spells	O texto exato que o conteúdo forma
+	Alternate and actual text replace everything inside the tag for screen readers.	O texto alternativo e o texto real substituem tudo dentro da tag para os leitores de tela.
+	New tag	Nova tag
+	Drag tags onto the new tag to move them inside it.	Arraste tags para a nova tag para movê-las para dentro dela.
+	Add tag	Adicionar tag
+	Inside {tag}	Dentro de {tag}
+	At the top level	No nível superior
+	Draw a box around content, then choose what it is.	Desenhe uma caixa em volta do conteúdo e escolha o que ele é.
+	Tag this area as	Marcar esta área como
+	Alternate text (figures and formulas)	Texto alternativo (figuras e fórmulas)
+	Autotag form fields	Marcar campos de formulário automaticamente
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	O PdfCraft lê o layout de cada página e marca títulos, parágrafos, listas, tabelas, figuras, links e campos de formulário na ordem de leitura.
+	Find tables	Localizar tabelas
+	Find lists	Localizar listas
+	Tag form fields	Marcar campos de formulário
+	Give fields without a tooltip one from their label	Dar aos campos sem dica de ferramenta uma tirada do rótulo
+	This document is already tagged. Autotagging replaces all of its tags.	Este documento já está marcado. A marcação automática substitui todas as tags.
+	Replace the existing tags	Substituir as tags existentes
+	Autotag	Marcar
+	Autotag finished	Marcação automática concluída
+	{n} tags on {p} pages.	{n} tags em {p} páginas.
+	{n} figures need alternate text.	{n} figuras precisam de texto alternativo.
+	{n} form fields have no tooltip.	{n} campos de formulário não têm dica de ferramenta.
+	Check the reading order of each page with the Order panel.	Verifique a ordem de leitura de cada página com o painel Ordem.
+	Show tags	Mostrar tags
+	Results	Resultados
+	Screen readers announce the title and read the text in the document's language.	Os leitores de tela anunciam o título e leem o texto no idioma do documento.
+	Tag the document again (replaces its tags)	Marcar o documento novamente (substitui as tags)
+	Tag the document	Marcar o documento
+	Next	Avançar
+	Give the document's language as a language tag, such as en-US.	Informe o idioma do documento como uma tag de idioma, como en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Os leitores de tela leem a dica de ferramenta de um campo para dizer o que preencher. Confira cada uma.
+	Figure {i} of {n}	Figura {i} de {n}
+	Finish	Concluir
+	Undo takes back the whole action in one step.	Desfazer reverte a ação inteira em uma etapa.
+	Show checker results	Mostrar resultados do verificador
+	skipped	ignorado
+	{n} set	{n} definidos
+	structure order	ordem da estrutura
+	no figures	nenhuma figura
+	Tags	Tags
+	Order	Ordem
+	Heading 1	Título 1
+	Heading 2	Título 2
+	Heading 3	Título 3
+	Heading 4	Título 4
+	Heading 5	Título 5
+	Heading 6	Título 6
+	Figure	Figura
+	Figure with caption	Figura com legenda
+	Table cell	Célula de tabela
+	Formula	Fórmula
+	Form field	Campo de formulário
+	Artifact: header	Artefato: cabeçalho
+	Artifact: footer	Artefato: rodapé
+	Artifact: background	Artefato: plano de fundo
+	Form field tooltips	Dicas de ferramenta dos campos
+	Paragraphs	Parágrafos
+	Figures	Figuras
+	Tags panel	Painel Tags
+	Order panel	Painel Ordem
+	Autotag document…	Marcar documento automaticamente…
+	Autotag form fields…	Marcar campos de formulário automaticamente…
+	Make accessible…	Tornar acessível…
+	Change reading order	Alterar a ordem de leitura
+	Change tag properties	Alterar as propriedades da tag
+	Tag region	Marcar região

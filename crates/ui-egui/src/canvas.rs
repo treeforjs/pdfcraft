@@ -2292,7 +2292,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::Link
         | QuickTool::SignArea { .. }
         | QuickTool::MarqueeZoom
-        | QuickTool::Snapshot => false,
+        | QuickTool::Snapshot
+        | QuickTool::ReadingOrder => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();

@@ -2660,3 +2660,95 @@ compare-page	Moved	Přesunutá
 	embedded	vložený
 	not embedded	nevložený
 	{n} of the page is over the limit	{n} stránky je nad limitem.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Označený obsah {mcid} na stránce {page}
+	Marked content {mcid}	Označený obsah {mcid}
+	Object	Objekt
+	Annotation: {kind}	Anotace: {kind}
+	This document has no tags.	Tento dokument nemá tagy.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Tagy říkají čtečkám obrazovky, co je každá část stránky a v jakém pořadí ji číst.
+	Autotag document	Automaticky otagovat dokument
+	Reading order tool	Nástroj pořadí čtení
+	New tag…	Nový tag…
+	Tag properties…	Vlastnosti tagu…
+	Change to artifact	Změnit na artefakt
+	Delete tag	Odstranit tag
+	Collapse all tags	Sbalit všechny tagy
+	Expand all tags	Rozbalit všechny tagy
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Tento strom struktury je velmi velký: zobrazuje se jen jeho část a nelze jej upravovat.
+	Collapse some tags to see the rest.	Sbalte některé tagy, abyste viděli zbytek.
+	Clear page structure	Vymazat strukturu stránky
+	Nothing on this page is tagged yet.	Na této stránce zatím nic není otagováno.
+	Use the Reading order tool: draw a box around content and choose what it is.	Použijte nástroj pořadí čtení: nakreslete kolem obsahu rámeček a zvolte, co to je.
+	{n} drawing operations on this page are not tagged.	{n} kreslicích operací na této stránce není otagováno.
+	Tag properties	Vlastnosti tagu
+	What a figure or formula shows	Co obrázek nebo vzorec zobrazuje
+	Actual text	Skutečný text
+	The exact text the content spells	Přesný text, který obsah tvoří
+	Alternate and actual text replace everything inside the tag for screen readers.	Alternativní a skutečný text nahrazují pro čtečky obrazovky vše uvnitř tagu.
+	New tag	Nový tag
+	Drag tags onto the new tag to move them inside it.	Přetáhněte tagy na nový tag, abyste je do něj přesunuli.
+	Add tag	Přidat tag
+	Inside {tag}	Uvnitř {tag}
+	At the top level	Na nejvyšší úrovni
+	Draw a box around content, then choose what it is.	Nakreslete kolem obsahu rámeček a pak zvolte, co to je.
+	Tag this area as	Otagovat tuto oblast jako
+	Alternate text (figures and formulas)	Alternativní text (obrázky a vzorce)
+	Autotag form fields	Automaticky otagovat pole formuláře
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft čte rozvržení každé stránky a taguje nadpisy, odstavce, seznamy, tabulky, obrázky, odkazy a pole formulářů v pořadí čtení.
+	Find tables	Najít tabulky
+	Find lists	Najít seznamy
+	Tag form fields	Otagovat pole formuláře
+	Give fields without a tooltip one from their label	Dát polím bez popisku popisek podle jejich štítku
+	This document is already tagged. Autotagging replaces all of its tags.	Tento dokument už je otagován. Automatické tagování nahradí všechny jeho tagy.
+	Replace the existing tags	Nahradit stávající tagy
+	Autotag	Automaticky otagovat
+	Autotag finished	Automatické tagování dokončeno
+	{n} tags on {p} pages.	{n} tagů na {p} stránkách.
+	{n} figures need alternate text.	{n} obrázků potřebuje alternativní text.
+	{n} form fields have no tooltip.	{n} polí formuláře nemá popisek.
+	Check the reading order of each page with the Order panel.	Zkontrolujte pořadí čtení každé stránky v panelu Pořadí.
+	Show tags	Zobrazit tagy
+	Results	Výsledky
+	Screen readers announce the title and read the text in the document's language.	Čtečky obrazovky oznamují název a čtou text v jazyce dokumentu.
+	Tag the document again (replaces its tags)	Znovu otagovat dokument (nahradí jeho tagy)
+	Tag the document	Otagovat dokument
+	Next	Další
+	Give the document's language as a language tag, such as en-US.	Zadejte jazyk dokumentu jako jazykový kód, například en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Čtečky obrazovky čtou popisek pole, aby řekly, co vyplnit. Zkontrolujte každý.
+	Figure {i} of {n}	Obrázek {i} z {n}
+	Finish	Dokončit
+	Undo takes back the whole action in one step.	Zpět vrátí celou akci v jednom kroku.
+	Show checker results	Zobrazit výsledky kontroly
+	skipped	přeskočeno
+	{n} set	nastaveno: {n}
+	structure order	pořadí struktury
+	no figures	žádné obrázky
+	Tags	Tagy
+	Order	Pořadí
+	Heading 1	Nadpis 1
+	Heading 2	Nadpis 2
+	Heading 3	Nadpis 3
+	Heading 4	Nadpis 4
+	Heading 5	Nadpis 5
+	Heading 6	Nadpis 6
+	Figure	Obrázek
+	Figure with caption	Obrázek s titulkem
+	Table cell	Buňka tabulky
+	Formula	Vzorec
+	Form field	Pole formuláře
+	Artifact: header	Artefakt: záhlaví
+	Artifact: footer	Artefakt: zápatí
+	Artifact: background	Artefakt: pozadí
+	Form field tooltips	Popisky polí formuláře
+	Paragraphs	Odstavce
+	Figures	Obrázky
+	Tags panel	Panel Tagy
+	Order panel	Panel Pořadí
+	Autotag document…	Automaticky otagovat dokument…
+	Autotag form fields…	Automaticky otagovat pole formuláře…
+	Make accessible…	Zpřístupnit…
+	Change reading order	Změnit pořadí čtení
+	Change tag properties	Změnit vlastnosti tagu
+	Tag region	Otagovat oblast

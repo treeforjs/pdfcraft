@@ -590,6 +590,7 @@ impl Host for crate::PdfCraftApp {
                 crate::QuickTool::SignArea { certify: true } => "certify".to_string(),
                 crate::QuickTool::MarqueeZoom => "marquee-zoom".to_string(),
                 crate::QuickTool::Snapshot => "snapshot".to_string(),
+                crate::QuickTool::ReadingOrder => "reading-order".to_string(),
                 crate::QuickTool::Stamp(k) => format!("stamp-{}", k.name().trim_start_matches("PC").to_ascii_lowercase()),
                 crate::QuickTool::CustomStamp(i) => format!("custom-stamp-{i}"),
                 crate::QuickTool::Fill(f) => format!("fill-{}", f.command().trim_start_matches("sign.fill.")),
@@ -634,6 +635,16 @@ impl Host for crate::PdfCraftApp {
         if let Some(m) = state.as_object_mut() {
             m.insert("output_preview".into(), json!((self.right == Some(crate::RightPanel::OutputPreview)).then(|| self.output_preview_state())));
             m.insert("ink_manager".into(), json!((self.dialog == Some(crate::Dialog::InkManager)).then(|| self.ink_manager_state())));
+            // Tags / Order panels and the Reading Order tool: the selected tag (obj) and region.
+            m.insert(
+                "tags".into(),
+                json!({
+                    "selected": self.a11y_tools.tags.selected_obj(),
+                    "rows": self.a11y_tools.tags.rows.len(),
+                    "region": self.a11y_tools.region.map(|(p, r)| json!({ "page": p + 1, "region": r + 1 })),
+                    "pending_box": self.a11y_tools.reading.pending.as_ref().map(|b| json!({ "page": b.page + 1, "rect": b.rect })),
+                }),
+            );
         }
         state
     }

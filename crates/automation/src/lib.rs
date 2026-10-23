@@ -925,6 +925,8 @@ impl Automation {
             "tags_set" => self.tags_set(&a)?,
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
+            "tags_new" => self.tags_new(&a)?,
+            "tags_delete" => self.tags_delete(&a)?,
             "reading_order_list" => self.a11y_reading_order_list(&a)?,
             "reading_order_tag" => self.a11y_reading_order_tag(&a)?,
             "reading_order_move" => self.a11y_reading_order_move(&a)?,

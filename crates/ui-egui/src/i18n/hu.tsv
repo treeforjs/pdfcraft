@@ -2634,3 +2634,95 @@ compare-page	Moved	Áthelyezve
 	embedded	beágyazva
 	not embedded	nincs beágyazva
 	{n} of the page is over the limit	Az oldal {n} része a határ fölött van.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Jelölt tartalom: {mcid}, {page}. oldal
+	Marked content {mcid}	Jelölt tartalom: {mcid}
+	Object	Objektum
+	Annotation: {kind}	Megjegyzés: {kind}
+	This document has no tags.	Ennek a dokumentumnak nincsenek címkéi.
+	Tags tell screen readers what each part of the page is and in which order to read it.	A címkék megmondják a képernyőolvasóknak, mi az oldal egyes részei, és milyen sorrendben kell felolvasni őket.
+	Autotag document	Dokumentum automatikus címkézése
+	Reading order tool	Olvasási sorrend eszköz
+	New tag…	Új címke…
+	Tag properties…	Címke tulajdonságai…
+	Change to artifact	Átalakítás műtermékké
+	Delete tag	Címke törlése
+	Collapse all tags	Összes címke összecsukása
+	Expand all tags	Összes címke kibontása
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Ez a szerkezeti fa nagyon nagy: csak egy része látható, és nem szerkeszthető.
+	Collapse some tags to see the rest.	Csukjon össze néhány címkét a többi megtekintéséhez.
+	Clear page structure	Oldalszerkezet törlése
+	Nothing on this page is tagged yet.	Ezen az oldalon még semmi sincs címkézve.
+	Use the Reading order tool: draw a box around content and choose what it is.	Használja az Olvasási sorrend eszközt: rajzoljon keretet a tartalom köré, és válassza ki, mi az.
+	{n} drawing operations on this page are not tagged.	Ezen az oldalon {n} rajzolási művelet nincs címkézve.
+	Tag properties	Címke tulajdonságai
+	What a figure or formula shows	Mit mutat egy ábra vagy képlet
+	Actual text	Tényleges szöveg
+	The exact text the content spells	A tartalom által kiírt pontos szöveg
+	Alternate and actual text replace everything inside the tag for screen readers.	Az alternatív és a tényleges szöveg a képernyőolvasók számára a címkén belül mindent helyettesít.
+	New tag	Új címke
+	Drag tags onto the new tag to move them inside it.	Húzza a címkéket az új címkére, hogy áthelyezze őket bele.
+	Add tag	Címke hozzáadása
+	Inside {tag}	Ebben: {tag}
+	At the top level	A legfelső szinten
+	Draw a box around content, then choose what it is.	Rajzoljon keretet a tartalom köré, majd válassza ki, mi az.
+	Tag this area as	Terület címkézése mint
+	Alternate text (figures and formulas)	Alternatív szöveg (ábrák és képletek)
+	Autotag form fields	Űrlapmezők automatikus címkézése
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	A PdfCraft beolvassa minden oldal elrendezését, és olvasási sorrendben címkézi a címsorokat, bekezdéseket, listákat, táblázatokat, ábrákat, hivatkozásokat és űrlapmezőket.
+	Find tables	Táblázatok keresése
+	Find lists	Listák keresése
+	Tag form fields	Űrlapmezők címkézése
+	Give fields without a tooltip one from their label	Elemleírás nélküli mezők elemleírása a címkéjük alapján
+	This document is already tagged. Autotagging replaces all of its tags.	Ez a dokumentum már címkézett. Az automatikus címkézés az összes címkéjét lecseréli.
+	Replace the existing tags	Meglévő címkék cseréje
+	Autotag	Automatikus címkézés
+	Autotag finished	Az automatikus címkézés kész
+	{n} tags on {p} pages.	{n} címke {p} oldalon.
+	{n} figures need alternate text.	{n} ábrához alternatív szöveg kell.
+	{n} form fields have no tooltip.	{n} űrlapmezőnek nincs elemleírása.
+	Check the reading order of each page with the Order panel.	Ellenőrizze minden oldal olvasási sorrendjét a Sorrend panelen.
+	Show tags	Címkék megjelenítése
+	Results	Eredmények
+	Screen readers announce the title and read the text in the document's language.	A képernyőolvasók bemondják a címet, és a dokumentum nyelvén olvassák fel a szöveget.
+	Tag the document again (replaces its tags)	A dokumentum újracímkézése (lecseréli a címkéit)
+	Tag the document	A dokumentum címkézése
+	Next	Tovább
+	Give the document's language as a language tag, such as en-US.	Adja meg a dokumentum nyelvét nyelvkódként, például en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	A képernyőolvasók a mező elemleírását olvassák fel, hogy elmondják, mit kell kitölteni. Ellenőrizze mindet.
+	Figure {i} of {n}	{i}. ábra / {n}
+	Finish	Befejezés
+	Undo takes back the whole action in one step.	A visszavonás egy lépésben vonja vissza a teljes műveletet.
+	Show checker results	Ellenőrzési eredmények megjelenítése
+	skipped	kihagyva
+	{n} set	{n} beállítva
+	structure order	szerkezeti sorrend
+	no figures	nincs ábra
+	Tags	Címkék
+	Order	Sorrend
+	Heading 1	1. címsor
+	Heading 2	2. címsor
+	Heading 3	3. címsor
+	Heading 4	4. címsor
+	Heading 5	5. címsor
+	Heading 6	6. címsor
+	Figure	Ábra
+	Figure with caption	Ábra képaláírással
+	Table cell	Táblázatcella
+	Formula	Képlet
+	Form field	Űrlapmező
+	Artifact: header	Műtermék: élőfej
+	Artifact: footer	Műtermék: élőláb
+	Artifact: background	Műtermék: háttér
+	Form field tooltips	Űrlapmezők elemleírásai
+	Paragraphs	Bekezdések
+	Figures	Ábrák
+	Tags panel	Címkék panel
+	Order panel	Sorrend panel
+	Autotag document…	Dokumentum automatikus címkézése…
+	Autotag form fields…	Űrlapmezők automatikus címkézése…
+	Make accessible…	Akadálymentessé tétel…
+	Change reading order	Olvasási sorrend módosítása
+	Change tag properties	Címke tulajdonságainak módosítása
+	Tag region	Terület címkézése

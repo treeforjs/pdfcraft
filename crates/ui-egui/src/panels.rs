@@ -434,6 +434,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let mut panel_command: Option<&'static str> = None;
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
     let mut a11y_action: Option<crate::a11y_ui::PanelAction> = None;
+    let mut tags_action: Option<crate::tags_ui::TagsAction> = None;
+    let mut order_action: Option<(usize, crate::tags_ui::OrderAction)> = None;
     let mut compare_action: Option<crate::compare_ui::PanelAction> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
@@ -447,6 +449,11 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         let prefs = &app.comment_prefs;
         let sig_expanded = &mut app.sig_expanded;
         let a11y = &mut app.a11y;
+        let tools = &mut app.a11y_tools;
+        let editable = doc.allows_modification() && doc.editable();
+        if matches!(panel, RightPanel::Tags | RightPanel::Order) {
+            tools.tags.refresh(doc);
+        }
         let compare = &app.compare;
         let compare_running = app.compare_run.as_ref().filter(|r| r.new == id).and_then(|r| r.snapshot());
         let comment_allowed = doc.allows_annotation();
@@ -475,6 +482,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Attachments => ("Attachments", Some(info.attachments.len())),
                     RightPanel::Signatures => ("Signatures", Some(doc.signatures.iter().filter(|s| s.signed).count())),
                     RightPanel::Accessibility => ("Accessibility Checker", None),
+                    RightPanel::Tags => ("Tags", None),
+                    RightPanel::Order => ("Order", None),
                     RightPanel::Search => ("Search", None),
                     RightPanel::Compare => ("Compare", compare.as_ref().filter(|c| c.new == id).map(|c| c.result.text.changes.len())),
                     RightPanel::OutputPreview => ("Output preview", None),
@@ -621,6 +630,11 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Accessibility => {
                         a11y_action = crate::a11y_ui::panel(ui, &t, a11y, id);
                     }
+                    RightPanel::Tags => tags_action = crate::tags_ui::tags_panel(ui, &t, &mut tools.tags, editable),
+                    RightPanel::Order => {
+                        let page = view.current.min(info.pages.len().saturating_sub(1));
+                        order_action = crate::tags_ui::order_panel(ui, &t, tools, doc, page, editable).map(|a| (page, a));
+                    }
                     RightPanel::Search => crate::search_ui::panel(ui, &t, view, info.pages.len()),
                     RightPanel::Compare => compare_action = crate::compare_ui::panel(ui, &t, compare, compare_running, id),
                     RightPanel::OutputPreview => {}
@@ -679,6 +693,12 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(a) = a11y_action {
         app.a11y_action(index, a);
+    }
+    if let Some(a) = tags_action {
+        app.tags_action(index, a);
+    }
+    if let Some((page, a)) = order_action {
+        app.order_action(index, page, a);
     }
     if let Some(a) = compare_action {
         app.compare_action(index, a);

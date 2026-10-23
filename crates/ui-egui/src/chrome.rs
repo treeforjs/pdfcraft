@@ -389,6 +389,8 @@ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     (RightPanel::Attachments, tl!("Attachments")),
                     (RightPanel::Signatures, tl!("Signatures")),
                     (RightPanel::Accessibility, tl!("Accessibility Checker")),
+                    (RightPanel::Tags, tl!("Tags")),
+                    (RightPanel::Order, tl!("Order")),
                     (RightPanel::Search, tl!("Search")),
                     (RightPanel::Compare, tl!("Compare")),
                     (RightPanel::OutputPreview, tl!("Output preview")),
@@ -410,6 +412,9 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let has_signatures = doc.is_signed();
     let has_check = app.a11y.report.as_ref().is_some_and(|(d, _)| *d == id);
     let previewing = app.right == Some(RightPanel::OutputPreview);
+    let a11y_work = (app.left_open && app.left == crate::LeftPanel::Tool("accessibility"))
+        || matches!(app.right, Some(RightPanel::Tags | RightPanel::Order))
+        || app.quick_tool == crate::QuickTool::ReadingOrder;
     let (has_comments, has_outline, has_fields, has_layers, has_files) = (
         !doc.info.annotations.is_empty(),
         !doc.info.outline.is_empty(),
@@ -448,6 +453,11 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             }
             if previewing {
                 rail_button(ui, RightPanel::OutputPreview, "layers", "Output preview", false);
+            }
+            // The tag panels show while accessibility work is going on.
+            if a11y_work {
+                rail_button(ui, RightPanel::Tags, "tag", "Tags", false);
+                rail_button(ui, RightPanel::Order, "list-ordered", "Order", false);
             }
 
             // Page navigation cluster at the bottom (as in Acrobat's rail).

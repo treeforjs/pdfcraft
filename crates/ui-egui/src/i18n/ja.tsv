@@ -2636,3 +2636,95 @@ compare-page	Moved	移動
 	embedded	埋め込み
 	not embedded	埋め込みなし
 	{n} of the page is over the limit	ページの {n} が上限を超えています。
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	マークされたコンテンツ {mcid}（{page} ページ）
+	Marked content {mcid}	マークされたコンテンツ {mcid}
+	Object	オブジェクト
+	Annotation: {kind}	注釈: {kind}
+	This document has no tags.	この文書にはタグがありません。
+	Tags tell screen readers what each part of the page is and in which order to read it.	タグは、ページの各部分が何であり、どの順序で読むかをスクリーンリーダーに伝えます。
+	Autotag document	文書に自動タグ付け
+	Reading order tool	読み上げ順序ツール
+	New tag…	新しいタグ…
+	Tag properties…	タグのプロパティ…
+	Change to artifact	アーティファクトに変更
+	Delete tag	タグを削除
+	Collapse all tags	すべてのタグを折りたたむ
+	Expand all tags	すべてのタグを展開
+	This structure tree is very large: only part of it is shown, and it can't be edited.	この構造ツリーは非常に大きいため、一部のみ表示され、編集できません。
+	Collapse some tags to see the rest.	残りを表示するには、いくつかのタグを折りたたんでください。
+	Clear page structure	ページ構造をクリア
+	Nothing on this page is tagged yet.	このページにはまだタグ付けされたものがありません。
+	Use the Reading order tool: draw a box around content and choose what it is.	読み上げ順序ツールを使います。コンテンツを枠で囲み、その種類を選んでください。
+	{n} drawing operations on this page are not tagged.	このページの {n} 個の描画操作はタグ付けされていません。
+	Tag properties	タグのプロパティ
+	What a figure or formula shows	図や数式が示している内容
+	Actual text	実際のテキスト
+	The exact text the content spells	コンテンツが表す正確なテキスト
+	Alternate and actual text replace everything inside the tag for screen readers.	代替テキストと実際のテキストは、スクリーンリーダーに対してタグ内のすべてを置き換えます。
+	New tag	新しいタグ
+	Drag tags onto the new tag to move them inside it.	タグを新しいタグにドラッグすると、その中に移動します。
+	Add tag	タグを追加
+	Inside {tag}	{tag} の中
+	At the top level	最上位
+	Draw a box around content, then choose what it is.	コンテンツを枠で囲み、その種類を選んでください。
+	Tag this area as	この領域のタグ
+	Alternate text (figures and formulas)	代替テキスト（図と数式）
+	Autotag form fields	フォームフィールドに自動タグ付け
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft は各ページのレイアウトを読み取り、見出し、段落、リスト、表、図、リンク、フォームフィールドに読み上げ順序でタグを付けます。
+	Find tables	表を検出
+	Find lists	リストを検出
+	Tag form fields	フォームフィールドにタグ付け
+	Give fields without a tooltip one from their label	ツールヒントのないフィールドにラベルからツールヒントを付ける
+	This document is already tagged. Autotagging replaces all of its tags.	この文書にはすでにタグがあります。自動タグ付けはすべてのタグを置き換えます。
+	Replace the existing tags	既存のタグを置き換える
+	Autotag	自動タグ付け
+	Autotag finished	自動タグ付けが完了しました
+	{n} tags on {p} pages.	{p} ページに {n} 個のタグ。
+	{n} figures need alternate text.	{n} 個の図に代替テキストが必要です。
+	{n} form fields have no tooltip.	{n} 個のフォームフィールドにツールヒントがありません。
+	Check the reading order of each page with the Order panel.	順序パネルで各ページの読み上げ順序を確認してください。
+	Show tags	タグを表示
+	Results	結果
+	Screen readers announce the title and read the text in the document's language.	スクリーンリーダーはタイトルを読み上げ、文書の言語でテキストを読みます。
+	Tag the document again (replaces its tags)	文書にもう一度タグ付け（既存のタグを置き換え）
+	Tag the document	文書にタグ付け
+	Next	次へ
+	Give the document's language as a language tag, such as en-US.	文書の言語を en-US などの言語タグで入力してください。
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	スクリーンリーダーはフィールドのツールヒントを読み上げて入力内容を伝えます。それぞれ確認してください。
+	Figure {i} of {n}	図 {i}/{n}
+	Finish	完了
+	Undo takes back the whole action in one step.	元に戻すと、操作全体が 1 ステップで取り消されます。
+	Show checker results	チェック結果を表示
+	skipped	スキップ
+	{n} set	{n} 件設定
+	structure order	構造の順序
+	no figures	図なし
+	Tags	タグ
+	Order	順序
+	Heading 1	見出し 1
+	Heading 2	見出し 2
+	Heading 3	見出し 3
+	Heading 4	見出し 4
+	Heading 5	見出し 5
+	Heading 6	見出し 6
+	Figure	図
+	Figure with caption	キャプション付きの図
+	Table cell	表のセル
+	Formula	数式
+	Form field	フォームフィールド
+	Artifact: header	アーティファクト: ヘッダー
+	Artifact: footer	アーティファクト: フッター
+	Artifact: background	アーティファクト: 背景
+	Form field tooltips	フォームフィールドのツールヒント
+	Paragraphs	段落
+	Figures	図
+	Tags panel	タグパネル
+	Order panel	順序パネル
+	Autotag document…	文書に自動タグ付け…
+	Autotag form fields…	フォームフィールドに自動タグ付け…
+	Make accessible…	アクセシブルにする…
+	Change reading order	読み上げ順序を変更
+	Change tag properties	タグのプロパティを変更
+	Tag region	領域にタグ付け

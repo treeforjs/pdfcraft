@@ -342,6 +342,11 @@ impl PdfCraftApp {
             }
             "a11y.report" => self.show_accessibility_report(),
             "a11y.alt_text" => self.start_alt_text(),
+            "a11y.tags" | "a11y.order" | "a11y.tag_properties" | "a11y.new_tag" | "a11y.delete_tag" | "a11y.artifact" => self.tags_command(id),
+            "a11y.reading_order" => self.execute_reading_order_tool(),
+            "a11y.autotag" => self.open_autotag(false),
+            "a11y.autotag_fields" => self.open_autotag(true),
+            "actions.make_accessible" => self.start_make_accessible(),
             "a11y.reading_options" => self.dialog = Some(Dialog::Properties(crate::PropsTab::Advanced)),
             "export.all_images" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::AllImages)),
             "edit.text" => {

@@ -225,6 +225,44 @@ impl Automation {
         }))
     }
 
+    pub(crate) fn tags_new(&mut self, a: &Args) -> Result<Value> {
+        let ty = a.str("type")?.trim().to_owned();
+        let parent = match a.opt_int("parent")? {
+            None => None,
+            Some(n) => Some(
+                u32::try_from(n)
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .ok_or_else(|| ToolError::InvalidArgs("parent must be an element's object number (obj) from tags_tree".into()))?,
+            ),
+        };
+        let doc = self.doc(a)?;
+        let before: std::collections::HashSet<u32> = doc.tags().nodes.iter().filter_map(|n| n.obj.map(|o| o.num)).collect();
+        let id = doc.id;
+        self.session.apply(id, pdfcraft_engine::Edit::NewTag { parent, ty: ty.clone() }).map_err(failed)?;
+        let t = self.doc(a)?.tags();
+        let new = t.nodes.iter().filter_map(|n| n.obj.map(|o| o.num)).find(|n| !before.contains(n));
+        Ok(json!({ "obj": new, "type": ty, "parent": parent, "count": t.nodes.len() }))
+    }
+
+    pub(crate) fn tags_delete(&mut self, a: &Args) -> Result<Value> {
+        let element = u32::try_from(a.int("obj")?)
+            .ok()
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| ToolError::InvalidArgs("obj must be an element's object number (obj) from tags_tree".into()))?;
+        let doc = self.doc(a)?;
+        let t = doc.tags();
+        let node = t.nodes.iter().find(|n| n.obj.is_some_and(|o| o.num == element)).ok_or_else(|| {
+            ToolError::InvalidArgs(format!("object {element} is not an element of the structure tree (see tags_tree for the obj numbers)"))
+        })?;
+        let lifted = node.kids.len();
+        let parent = node.parent.and_then(|p| t.nodes.get(p)).and_then(|p| p.obj).map(|o| o.num);
+        let id = doc.id;
+        self.session.apply(id, pdfcraft_engine::Edit::DeleteTag { element }).map_err(failed)?;
+        let count = self.doc(a)?.tags().nodes.len();
+        Ok(json!({ "deleted": element, "lifted": lifted, "parent": parent, "count": count }))
+    }
+
     pub(crate) fn tags_add_namespace(&mut self, a: &Args) -> Result<Value> {
         let uri = a.str("uri")?.to_owned();
         let schema = a.opt_str("schema")?.map(str::to_owned);

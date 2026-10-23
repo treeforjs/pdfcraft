@@ -1574,6 +1574,23 @@ pub enum Edit {
         target: u32,
         after: bool,
     },
+    /// Tags / Order panel ▸ drag onto a tag: move structure element `element` inside element
+    /// `target`, as its last kid (an empty tag too).
+    MoveTagInto {
+        element: u32,
+        target: u32,
+    },
+    /// Tags panel ▸ New Tag: an empty structure element of type `ty` as the last kid of element
+    /// `parent` (object number; `None`: a new top-level element), see [`a11y::new_element`].
+    NewTag {
+        parent: Option<u32>,
+        ty: String,
+    },
+    /// Tags panel ▸ Delete Tag: take element `element` out of the structure tree; its kids take
+    /// its place in its parent, so its content stays tagged (see [`a11y::delete_element`]).
+    DeleteTag {
+        element: u32,
+    },
     /// Reading Order tool ▸ Clear Page Structure: take page `page`'s (0-based) tags (and,
     /// unless `keep_artifacts`, its artifacts) out of its content and the structure tree.
     ClearPageStructure {
@@ -1977,7 +1994,9 @@ impl Edit {
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagRegion { request } if request.role == a11y::RegionRole::Background => "Change to artifact".into(),
             Edit::TagRegion { .. } => "Tag region".into(),
-            Edit::MoveTag { .. } => "Change reading order".into(),
+            Edit::MoveTag { .. } | Edit::MoveTagInto { .. } => "Change reading order".into(),
+            Edit::NewTag { .. } => "New tag".into(),
+            Edit::DeleteTag { .. } => "Delete tag".into(),
             Edit::ClearPageStructure { .. } => "Clear page structure".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::Autotag { .. } => "Autotag document".into(),
@@ -2222,6 +2241,9 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::MarkArtifact { .. }
         | Edit::TagRegion { .. }
         | Edit::MoveTag { .. }
+        | Edit::MoveTagInto { .. }
+        | Edit::NewTag { .. }
+        | Edit::DeleteTag { .. }
         | Edit::ClearPageStructure { .. }
         | Edit::TagImage { .. }
         | Edit::Autotag { .. }
@@ -2623,6 +2645,19 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
             let t = pdfcraft_cos::ObjRef::new(*target, doc.generation(*target));
             let place = if *after { a11y::OrderPlace::After(t) } else { a11y::OrderPlace::Before(t) };
             a11y::move_element(doc, e, place).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::MoveTagInto { element, target } => {
+            let e = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            let t = pdfcraft_cos::ObjRef::new(*target, doc.generation(*target));
+            a11y::move_element(doc, e, a11y::OrderPlace::Into(t)).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::NewTag { parent, ty } => {
+            let p = parent.map(|n| pdfcraft_cos::ObjRef::new(n, doc.generation(n)));
+            a11y::new_element(doc, p, ty).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::DeleteTag { element } => {
+            let e = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            a11y::delete_element(doc, e).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
         Edit::ClearPageStructure { page, keep_artifacts } => {
             a11y::clear_page_structure(doc, *page, *keep_artifacts).map_err(|e| EditError::Accessibility(e.to_string()))?;

@@ -2659,3 +2659,95 @@ compare-page	Moved	Переміщена
 	embedded	вбудований
 	not embedded	не вбудований
 	{n} of the page is over the limit	{n} сторінки понад межу.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Розмічений вміст {mcid} на сторінці {page}
+	Marked content {mcid}	Розмічений вміст {mcid}
+	Object	Об’єкт
+	Annotation: {kind}	Анотація: {kind}
+	This document has no tags.	У цьому документі немає тегів.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Теги повідомляють програмам читання з екрана, чим є кожна частина сторінки і в якому порядку її читати.
+	Autotag document	Автоматично розставити теги в документі
+	Reading order tool	Інструмент порядку читання
+	New tag…	Новий тег…
+	Tag properties…	Властивості тегу…
+	Change to artifact	Перетворити на артефакт
+	Delete tag	Видалити тег
+	Collapse all tags	Згорнути всі теги
+	Expand all tags	Розгорнути всі теги
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Це дерево структури дуже велике: показано лише його частину, і його не можна редагувати.
+	Collapse some tags to see the rest.	Згорніть деякі теги, щоб побачити решту.
+	Clear page structure	Очистити структуру сторінки
+	Nothing on this page is tagged yet.	На цій сторінці ще нічого не позначено тегами.
+	Use the Reading order tool: draw a box around content and choose what it is.	Скористайтеся інструментом порядку читання: обведіть вміст рамкою й виберіть, що це.
+	{n} drawing operations on this page are not tagged.	Операцій малювання на цій сторінці без тегів: {n}.
+	Tag properties	Властивості тегу
+	What a figure or formula shows	Що показує рисунок або формула
+	Actual text	Фактичний текст
+	The exact text the content spells	Точний текст, який утворює вміст
+	Alternate and actual text replace everything inside the tag for screen readers.	Альтернативний і фактичний текст замінюють для програм читання з екрана весь вміст тегу.
+	New tag	Новий тег
+	Drag tags onto the new tag to move them inside it.	Перетягніть теги на новий тег, щоб перемістити їх усередину.
+	Add tag	Додати тег
+	Inside {tag}	Усередині {tag}
+	At the top level	На верхньому рівні
+	Draw a box around content, then choose what it is.	Обведіть вміст рамкою, а потім виберіть, що це.
+	Tag this area as	Позначити цю область як
+	Alternate text (figures and formulas)	Альтернативний текст (рисунки й формули)
+	Autotag form fields	Автоматично розставити теги в полях форми
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft читає макет кожної сторінки й розставляє теги заголовкам, абзацам, спискам, таблицям, рисункам, посиланням і полям форм у порядку читання.
+	Find tables	Знаходити таблиці
+	Find lists	Знаходити списки
+	Tag form fields	Розставити теги в полях форми
+	Give fields without a tooltip one from their label	Дати полям без підказки підказку з їхнього підпису
+	This document is already tagged. Autotagging replaces all of its tags.	У цьому документі вже є теги. Автоматичне розставлення замінить їх усі.
+	Replace the existing tags	Замінити наявні теги
+	Autotag	Розставити теги
+	Autotag finished	Автоматичне розставлення тегів завершено
+	{n} tags on {p} pages.	Тегів: {n}, сторінок: {p}.
+	{n} figures need alternate text.	Рисунків без альтернативного тексту: {n}.
+	{n} form fields have no tooltip.	Полів форми без підказки: {n}.
+	Check the reading order of each page with the Order panel.	Перевірте порядок читання кожної сторінки на панелі «Порядок».
+	Show tags	Показати теги
+	Results	Результати
+	Screen readers announce the title and read the text in the document's language.	Програми читання з екрана оголошують назву й читають текст мовою документа.
+	Tag the document again (replaces its tags)	Заново розставити теги в документі (замінить наявні)
+	Tag the document	Розставити теги в документі
+	Next	Далі
+	Give the document's language as a language tag, such as en-US.	Укажіть мову документа у вигляді мовного тегу, наприклад en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Програми читання з екрана читають підказку поля, щоб сказати, що заповнити. Перевірте кожну.
+	Figure {i} of {n}	Рисунок {i} з {n}
+	Finish	Готово
+	Undo takes back the whole action in one step.	Скасування повертає всю дію за один крок.
+	Show checker results	Показати результати перевірки
+	skipped	пропущено
+	{n} set	задано: {n}
+	structure order	порядок структури
+	no figures	немає рисунків
+	Tags	Теги
+	Order	Порядок
+	Heading 1	Заголовок 1
+	Heading 2	Заголовок 2
+	Heading 3	Заголовок 3
+	Heading 4	Заголовок 4
+	Heading 5	Заголовок 5
+	Heading 6	Заголовок 6
+	Figure	Рисунок
+	Figure with caption	Рисунок із підписом
+	Table cell	Комірка таблиці
+	Formula	Формула
+	Form field	Поле форми
+	Artifact: header	Артефакт: верхній колонтитул
+	Artifact: footer	Артефакт: нижній колонтитул
+	Artifact: background	Артефакт: тло
+	Form field tooltips	Підказки полів форми
+	Paragraphs	Абзаци
+	Figures	Рисунки
+	Tags panel	Панель «Теги»
+	Order panel	Панель «Порядок»
+	Autotag document…	Автоматично розставити теги в документі…
+	Autotag form fields…	Автоматично розставити теги в полях форми…
+	Make accessible…	Зробити доступним…
+	Change reading order	Змінити порядок читання
+	Change tag properties	Змінити властивості тегу
+	Tag region	Позначити область

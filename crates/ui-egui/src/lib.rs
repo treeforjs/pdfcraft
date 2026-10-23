@@ -27,6 +27,9 @@ mod actions_ui;
 pub mod canvas;
 mod chrome;
 mod combine_ui;
+pub mod make_accessible_ui;
+pub mod reading_order_ui;
+pub mod tags_ui;
 pub use combine_ui::{Columns as CombineColumns, Lock as CombineLock, SortKey};
 mod commands;
 mod comment_props;
@@ -186,6 +189,10 @@ pub enum RightPanel {
     Signatures,
     /// Accessibility Checker results.
     Accessibility,
+    /// The structure tree (Accessibility ▸ Tags).
+    Tags,
+    /// A page's reading order (Accessibility ▸ Order).
+    Order,
     /// Advanced Search results.
     Search,
     /// Compare files: the differences.
@@ -230,6 +237,8 @@ pub enum QuickTool {
     MarqueeZoom,
     /// Edit ▸ Take a Snapshot.
     Snapshot,
+    /// Accessibility ▸ Reading order tool: draw a box around content and tag it.
+    ReadingOrder,
 }
 
 /// Files dropped on a document's page grid.
@@ -339,6 +348,15 @@ pub enum Dialog {
     ConvertColors,
     /// Print production ▸ Add printer marks.
     PrinterMarks,
+    /// Tags panel ▸ Tag properties.
+    TagProperties,
+    /// Tags panel ▸ New tag.
+    NewTag,
+    /// Accessibility ▸ Autotag document / form fields: the options, then what was made.
+    Autotag,
+    AutotagSummary,
+    /// Use guided actions ▸ Make accessible.
+    MakeAccessible,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -558,6 +576,9 @@ pub struct PdfCraftApp {
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<pdfcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
+    /// The Tags and Order panels, the Reading Order tool and the autotag / Make Accessible
+    /// dialogs.
+    pub a11y_tools: tags_ui::A11yTools,
     /// List the OS key store's signing identities among the digital IDs (the desktop app).
     pub os_key_store_ids: bool,
     pub cert_viewer: Option<sign_ui::CertViewer>,
@@ -841,6 +862,7 @@ impl PdfCraftApp {
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
+            a11y_tools: Default::default(),
             os_key_store_ids: false,
             cert_viewer: None,
             sig_props: None,
@@ -1741,6 +1763,8 @@ impl PdfCraftApp {
                     "attachments" => Some(RightPanel::Attachments),
                     "signatures" => Some(RightPanel::Signatures),
                     "accessibility" => Some(RightPanel::Accessibility),
+                    "tags" => Some(RightPanel::Tags),
+                    "order" => Some(RightPanel::Order),
                     "search" => Some(RightPanel::Search),
                     "compare" => Some(RightPanel::Compare),
                     "output-preview" => Some(RightPanel::OutputPreview),
@@ -1994,6 +2018,7 @@ impl PdfCraftApp {
                     "sign" => QuickTool::SignArea { certify: false },
                     "marquee-zoom" => QuickTool::MarqueeZoom,
                     "snapshot" => QuickTool::Snapshot,
+                    "reading-order" => QuickTool::ReadingOrder,
                     "certify" => QuickTool::SignArea { certify: true },
                     custom if custom.starts_with("custom-stamp-") => {
                         let i: usize = custom[13..].parse().map_err(|_| format!("bad stamp {custom}"))?;
@@ -2367,7 +2392,10 @@ impl eframe::App for PdfCraftApp {
             None if self.combine_showing() => combine_ui::page(self, ui),
             None => home::show(self, ui),
             Some(_) if self.side_by_side_showing() => compare_view::show(self, ui),
-            Some(i) => canvas::document_area(self, i, ui),
+            Some(i) => {
+                canvas::document_area(self, i, ui);
+                reading_order_ui::overlay(self, i, ui);
+            }
         });
         self.process_pending_edits();
         if self.win.overlay.is_main() {

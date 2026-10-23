@@ -552,3 +552,46 @@ fn keep_tags_on_edit_through_tools() {
     assert_eq!(outline(&ok(&mut a, "tags_tree", json!({ "doc": again }))).len(), 4);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn new_delete_and_move_into_tags_through_tools() {
+    let dir = workdir("new-delete");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "tagged.pdf" }))["doc"].as_u64().unwrap();
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    let (document, h1, photo) = (obj_of(&t, "Document"), obj_of(&t, "H1"), obj_of(&t, "Photo"));
+
+    // A new section inside the Document; the heading and the figure move into it.
+    let sect = ok(&mut a, "tags_new", json!({ "doc": doc, "type": "Sect", "parent": document }))["obj"].as_u64().unwrap();
+    ok(&mut a, "reading_order_move", json!({ "doc": doc, "element": h1, "into": sect }));
+    ok(&mut a, "reading_order_move", json!({ "doc": doc, "element": photo, "into": sect }));
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "Sect".to_owned()), (2, "H1".to_owned()), (2, "Figure".to_owned())]);
+
+    // Deleting the section brings them back up, in order; the content stays tagged.
+    let r = ok(&mut a, "tags_delete", json!({ "doc": doc, "obj": sect }));
+    assert_eq!((r["lifted"].as_u64(), r["parent"].as_u64()), (Some(2), Some(document)));
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "Figure".to_owned())]);
+    // Deleting the heading moves its marked content into the Document.
+    ok(&mut a, "tags_delete", json!({ "doc": doc, "obj": h1 }));
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(t["elements"][0]["kids"][0]["mcid"], 0, "{}", t["elements"][0]);
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(outline(&ok(&mut a, "tags_tree", json!({ "doc": doc }))).len(), 3);
+
+    // Bad requests change nothing.
+    for (tool, bad) in [
+        ("tags_new", json!({ "doc": doc, "type": "Bogus" })),
+        ("tags_new", json!({ "doc": doc, "type": "P", "parent": 9999 })),
+        ("tags_delete", json!({ "doc": doc, "obj": 3 })),
+        ("tags_delete", json!({ "doc": doc, "obj": 0 })),
+        ("tags_delete", json!({ "doc": doc, "obj": -4 })),
+        ("reading_order_move", json!({ "doc": doc, "element": document, "into": h1 })),
+        ("reading_order_move", json!({ "doc": doc, "element": h1, "into": h1 })),
+        ("reading_order_move", json!({ "doc": doc, "element": h1, "into": photo, "after": photo })),
+    ] {
+        assert!(a.call(tool, &bad).is_err(), "{tool} {bad}");
+    }
+    assert_eq!(outline(&ok(&mut a, "tags_tree", json!({ "doc": doc }))).len(), 3);
+}

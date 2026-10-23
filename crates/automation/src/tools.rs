@@ -1842,13 +1842,14 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "rect", "role"],
             )),
-        t("reading_order_move", "Change the reading order", "Order panel: move a structure element (element: its obj, from reading_order_list or tags_tree), with everything inside it, to just before another (before: obj) or just after one (after: obj) among that one's siblings, or to region number `to` of page (moving down puts it after that region, up before it). Refused when the target is inside the element or an element can't be edited. MCIDs and the parent tree don't change. One undo step. Returns the page's reading order after when page is given.")
+        t("reading_order_move", "Change the reading order", "Order panel: move a structure element (element: its obj, from reading_order_list or tags_tree), with everything inside it, to just before another (before: obj) or just after one (after: obj) among that one's siblings, or to region number `to` of page (moving down puts it after that region, up before it), or inside another as its last kid (into: obj; an empty tag too, as dropping on a tag in the Tags panel). Refused when the target is inside the element or an element can't be edited. MCIDs and the parent tree don't change. One undo step. Returns the page's reading order after when page is given.")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "element": { "type": "integer", "minimum": 1 },
                     "before": { "type": "integer", "minimum": 1 },
                     "after": { "type": "integer", "minimum": 1 },
+                    "into": { "type": "integer", "minimum": 1, "description": "Move inside this element (obj), as its last kid." },
                     "to": { "type": "integer", "minimum": 1, "description": "A 1-based region number on page." },
                     "page": { "type": "integer", "minimum": 1, "description": "1-based page (needed with to)." }
                 }),
@@ -1898,6 +1899,19 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "obj"],
             )),
+        t("tags_new", "New tag", "Tags panel ▸ New Tag: add an empty structure element of type (a standard structure type, or a custom type the role map maps to one) as the last kid of parent (an element's obj from tags_tree), or as a new top-level element when parent is left out. Move content tags into it with reading_order_move into. The document must be tagged. One undo step. Returns the new element's obj and the element count.")
+            .cmd("a11y.new_tag")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "type": { "type": "string", "description": "The new element's structure type (P, H1, Sect, Figure …)." },
+                    "parent": { "type": "integer", "minimum": 1, "description": "The parent element's obj from tags_tree (default: top level)." }
+                }),
+                &["doc", "type"],
+            )),
+        t("tags_delete", "Delete tag", "Tags panel ▸ Delete Tag: take a structure element (obj from tags_tree) out of the tree. Its kids take its place in its parent, in order: child elements get the parent as /P, its marked content keeps its page (written as a marked-content reference) and the parent tree points that content and its annotations at the parent, so nothing it held becomes untagged and the reading order stays. A top-level element that holds content itself is refused (the tree root holds only elements), as is content inside form XObjects. One undo step. Returns how many kids moved up and the parent's obj.")
+            .cmd("a11y.delete_tag")
+            .with(schema(json!({ "doc": doc(), "obj": { "type": "integer", "minimum": 1, "description": "The element's obj from tags_tree." } }), &["doc", "obj"])),
         t("tags_add_namespace", "Add structure namespace", "PDF 2.0 structure namespaces (ISO 32000-2 §14.7.4): add a namespace (uri, or pdf-2.0, pdf-1.7, mathml) to the structure tree's /Namespaces, or change the one there: its schema (a file name or URL) and role mappings (role_map: [{type, maps_to, namespace}], /RoleMapNS; namespace is the target's URI or short name, omitted for the default namespace; an empty maps_to removes that mapping). Every mapped type must then reach a standard type: circular or dead-end chains are refused, and standard PDF 2.0 types can't be remapped in the PDF 2.0 namespace. Then put elements in it with tags_set namespace. All or nothing, one undo step. Returns the namespace.")
             .with(schema(
                 json!({

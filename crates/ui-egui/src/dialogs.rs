@@ -7,6 +7,19 @@ use pdfcraft_engine::Edit;
 
 use crate::{CloseRequest, Dialog, PdfCraftApp, PropsTab, panels::human_size, widgets};
 
+/// A dialog body that may have moved on to another dialog (or closed it while running a
+/// command): whether to close, and the dialog to show next.
+fn follow(app: &PdfCraftApp, dialog: Dialog, done: bool, next: &mut Dialog) -> bool {
+    match app.dialog {
+        Some(d) if d != dialog => {
+            *next = d;
+            false
+        }
+        None => true,
+        _ => done,
+    }
+}
+
 const INFO_KEYS: [&str; 4] = ["Title", "Author", "Subject", "Keywords"];
 
 pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
@@ -914,6 +927,31 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                     app.toast = None;
                 }
                 close = apply || cancel;
+                return;
+            }
+            Dialog::TagProperties => {
+                let done = crate::tags_ui::props_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::NewTag => {
+                let done = crate::tags_ui::new_tag_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::Autotag => {
+                let done = crate::make_accessible_ui::autotag_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::AutotagSummary => {
+                let done = crate::make_accessible_ui::summary_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::MakeAccessible => {
+                let done = crate::make_accessible_ui::make_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
                 return;
             }
             Dialog::AltText => {

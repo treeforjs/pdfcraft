@@ -26,6 +26,7 @@ mod reading;
 mod reading_order;
 mod report;
 mod structure;
+mod tag_edit;
 mod tags;
 
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
@@ -49,6 +50,7 @@ pub use reading_order::{
     move_element, page_order, tag_region,
 };
 pub use report::report_html;
+pub use tag_edit::{DeleteResult, delete_element, new_element};
 pub use tags::{
     AltTargets, FigureTarget, MAX_TEXT, TagChange, TagError, TagKid, TagNode, Tags, UntaggedImage, allowed_types, alt_targets, set_tag, tag_image,
     tags, untagged_images,
@@ -529,5 +531,7 @@ pub fn check(doc: &Document, options: &Options) -> Report {
 mod keep_tests;
 #[cfg(test)]
 mod reading_order_tests;
+#[cfg(test)]
+mod tag_edit_tests;
 #[cfg(test)]
 mod tests;

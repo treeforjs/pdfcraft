@@ -2597,3 +2597,95 @@ compare-page	Moved	తరలించబడింది
 	embedded	పొందుపరచబడింది
 	not embedded	పొందుపరచలేదు
 	{n} of the page is over the limit	పేజీలో {n} పరిమితిని మించింది.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	పేజీ {page}లో గుర్తించిన కంటెంట్ {mcid}
+	Marked content {mcid}	గుర్తించిన కంటెంట్ {mcid}
+	Object	ఆబ్జెక్ట్
+	Annotation: {kind}	వ్యాఖ్య: {kind}
+	This document has no tags.	ఈ పత్రానికి ట్యాగ్‌లు లేవు.
+	Tags tell screen readers what each part of the page is and in which order to read it.	పేజీలోని ప్రతి భాగం ఏమిటో, ఏ క్రమంలో చదవాలో ట్యాగ్‌లు స్క్రీన్ రీడర్‌లకు చెబుతాయి.
+	Autotag document	పత్రానికి స్వయంచాలకంగా ట్యాగ్ చేయి
+	Reading order tool	చదివే క్రమం సాధనం
+	New tag…	కొత్త ట్యాగ్…
+	Tag properties…	ట్యాగ్ లక్షణాలు…
+	Change to artifact	ఆర్టిఫ్యాక్ట్‌గా మార్చు
+	Delete tag	ట్యాగ్ తొలగించు
+	Collapse all tags	అన్ని ట్యాగ్‌లను ముడుచు
+	Expand all tags	అన్ని ట్యాగ్‌లను విస్తరించు
+	This structure tree is very large: only part of it is shown, and it can't be edited.	ఈ నిర్మాణ వృక్షం చాలా పెద్దది: దానిలో కొంత భాగమే చూపబడుతుంది, దాన్ని సవరించలేరు.
+	Collapse some tags to see the rest.	మిగతావి చూడటానికి కొన్ని ట్యాగ్‌లను ముడుచండి.
+	Clear page structure	పేజీ నిర్మాణాన్ని తొలగించు
+	Nothing on this page is tagged yet.	ఈ పేజీలో ఇంకా ఏదీ ట్యాగ్ చేయలేదు.
+	Use the Reading order tool: draw a box around content and choose what it is.	చదివే క్రమం సాధనాన్ని ఉపయోగించండి: కంటెంట్ చుట్టూ పెట్టె గీసి అది ఏమిటో ఎంచుకోండి.
+	{n} drawing operations on this page are not tagged.	ఈ పేజీలో {n} డ్రాయింగ్ చర్యలు ట్యాగ్ చేయబడలేదు.
+	Tag properties	ట్యాగ్ లక్షణాలు
+	What a figure or formula shows	చిత్రం లేదా సూత్రం ఏమి చూపిస్తుంది
+	Actual text	అసలు వచనం
+	The exact text the content spells	కంటెంట్ ఖచ్చితంగా సూచించే వచనం
+	Alternate and actual text replace everything inside the tag for screen readers.	ప్రత్యామ్నాయ వచనం, అసలు వచనం స్క్రీన్ రీడర్‌ల కోసం ట్యాగ్‌లోని ప్రతిదాన్నీ భర్తీ చేస్తాయి.
+	New tag	కొత్త ట్యాగ్
+	Drag tags onto the new tag to move them inside it.	కొత్త ట్యాగ్‌లోకి తరలించడానికి ట్యాగ్‌లను దానిపైకి లాగండి.
+	Add tag	ట్యాగ్ జోడించు
+	Inside {tag}	{tag} లోపల
+	At the top level	అగ్ర స్థాయిలో
+	Draw a box around content, then choose what it is.	కంటెంట్ చుట్టూ పెట్టె గీసి, అది ఏమిటో ఎంచుకోండి.
+	Tag this area as	ఈ ప్రాంతాన్ని ఇలా ట్యాగ్ చేయి
+	Alternate text (figures and formulas)	ప్రత్యామ్నాయ వచనం (చిత్రాలు, సూత్రాలు)
+	Autotag form fields	ఫారమ్ ఫీల్డ్‌లకు స్వయంచాలకంగా ట్యాగ్ చేయి
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft ప్రతి పేజీ లేఅవుట్‌ను చదివి, శీర్షికలు, పేరాలు, జాబితాలు, పట్టికలు, చిత్రాలు, లింక్‌లు, ఫారమ్ ఫీల్డ్‌లను చదివే క్రమంలో ట్యాగ్ చేస్తుంది.
+	Find tables	పట్టికలను కనుగొను
+	Find lists	జాబితాలను కనుగొను
+	Tag form fields	ఫారమ్ ఫీల్డ్‌లను ట్యాగ్ చేయి
+	Give fields without a tooltip one from their label	టూల్‌టిప్ లేని ఫీల్డ్‌లకు వాటి లేబుల్ నుండి ఒకటి ఇవ్వు
+	This document is already tagged. Autotagging replaces all of its tags.	ఈ పత్రం ఇప్పటికే ట్యాగ్ చేయబడింది. స్వయంచాలక ట్యాగింగ్ దాని అన్ని ట్యాగ్‌లను భర్తీ చేస్తుంది.
+	Replace the existing tags	ఉన్న ట్యాగ్‌లను భర్తీ చేయి
+	Autotag	స్వయంచాలక ట్యాగ్
+	Autotag finished	స్వయంచాలక ట్యాగింగ్ పూర్తయింది
+	{n} tags on {p} pages.	{p} పేజీలలో {n} ట్యాగ్‌లు.
+	{n} figures need alternate text.	{n} చిత్రాలకు ప్రత్యామ్నాయ వచనం అవసరం.
+	{n} form fields have no tooltip.	{n} ఫారమ్ ఫీల్డ్‌లకు టూల్‌టిప్ లేదు.
+	Check the reading order of each page with the Order panel.	క్రమం ప్యానెల్‌తో ప్రతి పేజీ చదివే క్రమాన్ని తనిఖీ చేయండి.
+	Show tags	ట్యాగ్‌లు చూపించు
+	Results	ఫలితాలు
+	Screen readers announce the title and read the text in the document's language.	స్క్రీన్ రీడర్‌లు శీర్షికను ప్రకటించి, పత్రం భాషలో వచనాన్ని చదువుతాయి.
+	Tag the document again (replaces its tags)	పత్రాన్ని మళ్లీ ట్యాగ్ చేయి (దాని ట్యాగ్‌లను భర్తీ చేస్తుంది)
+	Tag the document	పత్రాన్ని ట్యాగ్ చేయి
+	Next	తదుపరి
+	Give the document's language as a language tag, such as en-US.	పత్రం భాషను en-US వంటి భాషా ట్యాగ్‌గా ఇవ్వండి.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	ఏమి నింపాలో చెప్పడానికి స్క్రీన్ రీడర్‌లు ఫీల్డ్ టూల్‌టిప్‌ను చదువుతాయి. ప్రతిదాన్నీ తనిఖీ చేయండి.
+	Figure {i} of {n}	{n}లో చిత్రం {i}
+	Finish	ముగించు
+	Undo takes back the whole action in one step.	రద్దు చేయి మొత్తం చర్యను ఒకే దశలో వెనక్కి తీసుకుంటుంది.
+	Show checker results	తనిఖీ ఫలితాలు చూపించు
+	skipped	దాటవేయబడింది
+	{n} set	{n} సెట్ చేయబడ్డాయి
+	structure order	నిర్మాణ క్రమం
+	no figures	చిత్రాలు లేవు
+	Tags	ట్యాగ్‌లు
+	Order	క్రమం
+	Heading 1	శీర్షిక 1
+	Heading 2	శీర్షిక 2
+	Heading 3	శీర్షిక 3
+	Heading 4	శీర్షిక 4
+	Heading 5	శీర్షిక 5
+	Heading 6	శీర్షిక 6
+	Figure	చిత్రం
+	Figure with caption	శీర్షికతో చిత్రం
+	Table cell	పట్టిక గడి
+	Formula	సూత్రం
+	Form field	ఫారమ్ ఫీల్డ్
+	Artifact: header	ఆర్టిఫ్యాక్ట్: హెడర్
+	Artifact: footer	ఆర్టిఫ్యాక్ట్: ఫుటర్
+	Artifact: background	ఆర్టిఫ్యాక్ట్: నేపథ్యం
+	Form field tooltips	ఫారమ్ ఫీల్డ్ టూల్‌టిప్‌లు
+	Paragraphs	పేరాలు
+	Figures	చిత్రాలు
+	Tags panel	ట్యాగ్‌ల ప్యానెల్
+	Order panel	క్రమం ప్యానెల్
+	Autotag document…	పత్రానికి స్వయంచాలకంగా ట్యాగ్ చేయి…
+	Autotag form fields…	ఫారమ్ ఫీల్డ్‌లకు స్వయంచాలకంగా ట్యాగ్ చేయి…
+	Make accessible…	అందుబాటులోకి తెచ్చు…
+	Change reading order	చదివే క్రమం మార్చు
+	Change tag properties	ట్యాగ్ లక్షణాలు మార్చు
+	Tag region	ప్రాంతాన్ని ట్యాగ్ చేయి

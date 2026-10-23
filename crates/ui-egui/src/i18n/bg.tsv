@@ -2598,3 +2598,95 @@ compare-page	Moved	Преместена
 	embedded	вграден
 	not embedded	не е вграден
 	{n} of the page is over the limit	{n} от страницата е над границата.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Маркирано съдържание {mcid} на страница {page}
+	Marked content {mcid}	Маркирано съдържание {mcid}
+	Object	Обект
+	Annotation: {kind}	Анотация: {kind}
+	This document has no tags.	Този документ няма тагове.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Таговете казват на екранните четци какво е всяка част от страницата и в какъв ред да се чете.
+	Autotag document	Автоматично тагване на документа
+	Reading order tool	Инструмент за ред на четене
+	New tag…	Нов таг…
+	Tag properties…	Свойства на тага…
+	Change to artifact	Промяна в артефакт
+	Delete tag	Изтриване на тага
+	Collapse all tags	Свиване на всички тагове
+	Expand all tags	Разгъване на всички тагове
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Това структурно дърво е много голямо: показва се само част от него и не може да се редактира.
+	Collapse some tags to see the rest.	Свийте някои тагове, за да видите останалите.
+	Clear page structure	Изчистване на структурата на страницата
+	Nothing on this page is tagged yet.	Нищо на тази страница все още не е тагнато.
+	Use the Reading order tool: draw a box around content and choose what it is.	Използвайте инструмента за ред на четене: начертайте правоъгълник около съдържанието и изберете какво е то.
+	{n} drawing operations on this page are not tagged.	{n} операции за рисуване на тази страница не са тагнати.
+	Tag properties	Свойства на тага
+	What a figure or formula shows	Какво показва фигурата или формулата
+	Actual text	Действителен текст
+	The exact text the content spells	Точният текст, който съдържанието изписва
+	Alternate and actual text replace everything inside the tag for screen readers.	Алтернативният и действителният текст заменят всичко в тага за екранните четци.
+	New tag	Нов таг
+	Drag tags onto the new tag to move them inside it.	Плъзнете тагове върху новия таг, за да ги преместите в него.
+	Add tag	Добавяне на таг
+	Inside {tag}	В {tag}
+	At the top level	На най-горното ниво
+	Draw a box around content, then choose what it is.	Начертайте правоъгълник около съдържанието, след което изберете какво е то.
+	Tag this area as	Тагване на тази област като
+	Alternate text (figures and formulas)	Алтернативен текст (фигури и формули)
+	Autotag form fields	Автоматично тагване на полетата на формуляра
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft чете оформлението на всяка страница и тагва заглавия, абзаци, списъци, таблици, фигури, връзки и полета на формуляри по реда на четене.
+	Find tables	Намиране на таблици
+	Find lists	Намиране на списъци
+	Tag form fields	Тагване на полетата на формуляра
+	Give fields without a tooltip one from their label	Даване на подсказка от етикета на полетата без такава
+	This document is already tagged. Autotagging replaces all of its tags.	Този документ вече е тагнат. Автоматичното тагване заменя всичките му тагове.
+	Replace the existing tags	Замяна на съществуващите тагове
+	Autotag	Автоматично тагване
+	Autotag finished	Автоматичното тагване завърши
+	{n} tags on {p} pages.	{n} тага на {p} страници.
+	{n} figures need alternate text.	{n} фигури се нуждаят от алтернативен текст.
+	{n} form fields have no tooltip.	{n} полета на формуляра нямат подсказка.
+	Check the reading order of each page with the Order panel.	Проверете реда на четене на всяка страница с панела „Ред“.
+	Show tags	Показване на таговете
+	Results	Резултати
+	Screen readers announce the title and read the text in the document's language.	Екранните четци обявяват заглавието и четат текста на езика на документа.
+	Tag the document again (replaces its tags)	Повторно тагване на документа (заменя таговете му)
+	Tag the document	Тагване на документа
+	Next	Напред
+	Give the document's language as a language tag, such as en-US.	Задайте езика на документа като езиков таг, например en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Екранните четци четат подсказката на полето, за да кажат какво да се попълни. Проверете всяка.
+	Figure {i} of {n}	Фигура {i} от {n}
+	Finish	Завършване
+	Undo takes back the whole action in one step.	Отмяната връща цялото действие с една стъпка.
+	Show checker results	Показване на резултатите от проверката
+	skipped	пропуснато
+	{n} set	зададени: {n}
+	structure order	ред на структурата
+	no figures	няма фигури
+	Tags	Тагове
+	Order	Ред
+	Heading 1	Заглавие 1
+	Heading 2	Заглавие 2
+	Heading 3	Заглавие 3
+	Heading 4	Заглавие 4
+	Heading 5	Заглавие 5
+	Heading 6	Заглавие 6
+	Figure	Фигура
+	Figure with caption	Фигура с надпис
+	Table cell	Клетка от таблица
+	Formula	Формула
+	Form field	Поле на формуляр
+	Artifact: header	Артефакт: горен колонтитул
+	Artifact: footer	Артефакт: долен колонтитул
+	Artifact: background	Артефакт: фон
+	Form field tooltips	Подсказки на полетата на формуляра
+	Paragraphs	Абзаци
+	Figures	Фигури
+	Tags panel	Панел „Тагове“
+	Order panel	Панел „Ред“
+	Autotag document…	Автоматично тагване на документа…
+	Autotag form fields…	Автоматично тагване на полетата на формуляра…
+	Make accessible…	Достъпност…
+	Change reading order	Промяна на реда на четене
+	Change tag properties	Промяна на свойствата на тага
+	Tag region	Тагване на област

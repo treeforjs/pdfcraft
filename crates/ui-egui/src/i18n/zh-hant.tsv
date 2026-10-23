@@ -2556,3 +2556,96 @@ compare-page	Moved	已移動
 	embedded	已內嵌
 	not embedded	未內嵌
 	{n} of the page is over the limit	頁面的 {n} 超過限制。
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	第 {page} 頁上的標記內容 {mcid}
+	Marked content {mcid}	標記內容 {mcid}
+	Object	物件
+	Annotation: {kind}	註解：{kind}
+	This document has no tags.	此文件沒有標籤。
+	Tags tell screen readers what each part of the page is and in which order to read it.	標籤告訴螢幕閱讀器頁面每個部分是什麼以及按什麼順序朗讀。
+	Autotag document	自動為文件加上標籤
+	Reading order tool	閱讀順序工具
+	New tag…	新增標籤…
+	Tag properties…	標籤內容…
+	Change to artifact	變更為成品
+	Delete tag	刪除標籤
+	Collapse all tags	摺疊所有標籤
+	Expand all tags	展開所有標籤
+	This structure tree is very large: only part of it is shown, and it can't be edited.	此結構樹非常大：僅顯示其中一部分，且無法編輯。
+	Collapse some tags to see the rest.	摺疊一些標籤以檢視其餘部分。
+	Clear page structure	清除頁面結構
+	Nothing on this page is tagged yet.	此頁面上尚無任何內容加上標籤。
+	Use the Reading order tool: draw a box around content and choose what it is.	使用閱讀順序工具：在內容周圍畫一個方框，然後選擇它是什麼。
+	{n} drawing operations on this page are not tagged.	此頁面上有 {n} 個繪圖操作未加上標籤。
+	Tag properties	標籤內容
+	What a figure or formula shows	圖形或公式顯示的內容
+	Actual text	實際文字
+	The exact text the content spells	內容所表示的確切文字
+	Alternate and actual text replace everything inside the tag for screen readers.	對於螢幕閱讀器，替代文字和實際文字會取代標籤內的所有內容。
+	New tag	新增標籤
+	Drag tags onto the new tag to move them inside it.	將標籤拖到新標籤上即可將它們移入其中。
+	Add tag	新增標籤
+	Inside {tag}	在 {tag} 內
+	At the top level	在頂層
+	Draw a box around content, then choose what it is.	在內容周圍畫一個方框，然後選擇它是什麼。
+	Tag this area as	將此區域標記為
+	Alternate text (figures and formulas)	替代文字（圖形和公式）
+	Autotag form fields	自動為表單欄位加上標籤
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft 讀取每一頁的版面，並按閱讀順序為標題、段落、清單、表格、圖形、連結和表單欄位加上標籤。
+	Find tables	尋找表格
+	Find lists	尋找清單
+	Tag form fields	為表單欄位加上標籤
+	Give fields without a tooltip one from their label	為沒有工具提示的欄位根據其標籤加上工具提示
+	This document is already tagged. Autotagging replaces all of its tags.	此文件已加上標籤。自動加上標籤會取代其所有標籤。
+	Replace the existing tags	取代現有標籤
+	Autotag	自動加上標籤
+	Autotag finished	自動加上標籤已完成
+	{n} tags on {p} pages.	{p} 頁上共 {n} 個標籤。
+	{n} figures need alternate text.	{n} 個圖形需要替代文字。
+	{n} form fields have no tooltip.	{n} 個表單欄位沒有工具提示。
+	Check the reading order of each page with the Order panel.	請使用順序面板檢查每一頁的閱讀順序。
+	Show tags	顯示標籤
+	Results	結果
+	Screen readers announce the title and read the text in the document's language.	螢幕閱讀器會讀出標題，並以文件的語言朗讀文字。
+	Tag the document again (replaces its tags)	重新為文件加上標籤（取代其標籤）
+	Tag the document	為文件加上標籤
+	Next	下一步
+	Give the document's language as a language tag, such as en-US.	請以語言標記（如 en-US）提供文件的語言。
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	螢幕閱讀器會讀出欄位的工具提示來說明要填寫什麼。請逐一檢查。
+	Figure {i} of {n}	第 {i} 個圖形，共 {n} 個
+	Finish	完成
+	Undo takes back the whole action in one step.	復原可一步撤回整個動作。
+	Show checker results	顯示檢查結果
+	skipped	已略過
+	{n} set	已設定 {n} 個
+	structure order	結構順序
+	no figures	無圖形
+	Tags	標籤
+	Order	順序
+	Heading 1	標題 1
+	Heading 2	標題 2
+	Heading 3	標題 3
+	Heading 4	標題 4
+	Heading 5	標題 5
+	Heading 6	標題 6
+	Figure	圖形
+	Figure with caption	附說明的圖形
+	Table	表格
+	Table cell	表格儲存格
+	Formula	公式
+	Form field	表單欄位
+	Artifact: header	成品：頁首
+	Artifact: footer	成品：頁尾
+	Artifact: background	成品：背景
+	Form field tooltips	表單欄位工具提示
+	Paragraphs	段落
+	Figures	圖形
+	Tags panel	標籤面板
+	Order panel	順序面板
+	Autotag document…	自動為文件加上標籤…
+	Autotag form fields…	自動為表單欄位加上標籤…
+	Make accessible…	使其無障礙…
+	Change reading order	變更閱讀順序
+	Change tag properties	變更標籤內容
+	Tag region	為區域加上標籤

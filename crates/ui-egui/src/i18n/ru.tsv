@@ -2550,3 +2550,96 @@ compare-page	Moved	Перемещена
 	embedded	встроен
 	not embedded	не встроен
 	{n} of the page is over the limit	{n} страницы выше предела.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Размеченное содержимое {mcid} на странице {page}
+	Marked content {mcid}	Размеченное содержимое {mcid}
+	Object	Объект
+	Annotation: {kind}	Аннотация: {kind}
+	This document has no tags.	В этом документе нет тегов.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Теги сообщают программам чтения с экрана, что представляет собой каждая часть страницы и в каком порядке её читать.
+	Autotag document	Автоматически расставить теги в документе
+	Reading order tool	Инструмент порядка чтения
+	New tag…	Новый тег…
+	Tag properties…	Свойства тега…
+	Change to artifact	Преобразовать в артефакт
+	Delete tag	Удалить тег
+	Collapse all tags	Свернуть все теги
+	Expand all tags	Развернуть все теги
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Это дерево структуры очень велико: показана только его часть, и его нельзя изменить.
+	Collapse some tags to see the rest.	Сверните некоторые теги, чтобы увидеть остальные.
+	Clear page structure	Очистить структуру страницы
+	Nothing on this page is tagged yet.	На этой странице пока ничего не размечено тегами.
+	Use the Reading order tool: draw a box around content and choose what it is.	Используйте инструмент порядка чтения: обведите содержимое рамкой и выберите, что это.
+	{n} drawing operations on this page are not tagged.	Операций рисования на этой странице без тегов: {n}.
+	Tag properties	Свойства тега
+	What a figure or formula shows	Что показывает рисунок или формула
+	Actual text	Фактический текст
+	The exact text the content spells	Точный текст, который образует содержимое
+	Alternate and actual text replace everything inside the tag for screen readers.	Альтернативный и фактический текст заменяют для программ чтения с экрана всё содержимое тега.
+	New tag	Новый тег
+	Drag tags onto the new tag to move them inside it.	Перетащите теги на новый тег, чтобы переместить их внутрь.
+	Add tag	Добавить тег
+	Inside {tag}	Внутри {tag}
+	At the top level	На верхнем уровне
+	Draw a box around content, then choose what it is.	Обведите содержимое рамкой, затем выберите, что это.
+	Tag this area as	Разметить эту область как
+	Alternate text (figures and formulas)	Альтернативный текст (рисунки и формулы)
+	Autotag form fields	Автоматически расставить теги в полях формы
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft читает макет каждой страницы и расставляет теги заголовкам, абзацам, спискам, таблицам, рисункам, ссылкам и полям форм в порядке чтения.
+	Find tables	Находить таблицы
+	Find lists	Находить списки
+	Tag form fields	Расставить теги в полях формы
+	Give fields without a tooltip one from their label	Дать полям без подсказки подсказку из их подписи
+	This document is already tagged. Autotagging replaces all of its tags.	В этом документе уже есть теги. Автоматическая расстановка заменит их все.
+	Replace the existing tags	Заменить существующие теги
+	Autotag	Расставить теги
+	Autotag finished	Автоматическая расстановка тегов завершена
+	{n} tags on {p} pages.	Тегов: {n}, страниц: {p}.
+	{n} figures need alternate text.	Рисунков без альтернативного текста: {n}.
+	{n} form fields have no tooltip.	Полей формы без подсказки: {n}.
+	Check the reading order of each page with the Order panel.	Проверьте порядок чтения каждой страницы на панели «Порядок».
+	Show tags	Показать теги
+	Results	Результаты
+	Screen readers announce the title and read the text in the document's language.	Программы чтения с экрана объявляют название и читают текст на языке документа.
+	Tag the document again (replaces its tags)	Заново расставить теги в документе (заменит существующие)
+	Tag the document	Расставить теги в документе
+	Next	Далее
+	Give the document's language as a language tag, such as en-US.	Укажите язык документа в виде языкового тега, например en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Программы чтения с экрана читают подсказку поля, чтобы сказать, что заполнить. Проверьте каждую.
+	Figure {i} of {n}	Рисунок {i} из {n}
+	Finish	Готово
+	Undo takes back the whole action in one step.	Отмена возвращает всё действие за один шаг.
+	Show checker results	Показать результаты проверки
+	skipped	пропущено
+	{n} set	задано: {n}
+	structure order	порядок структуры
+	no figures	нет рисунков
+	Tags	Теги
+	Order	Порядок
+	Heading 1	Заголовок 1
+	Heading 2	Заголовок 2
+	Heading 3	Заголовок 3
+	Heading 4	Заголовок 4
+	Heading 5	Заголовок 5
+	Heading 6	Заголовок 6
+	Figure	Рисунок
+	Figure with caption	Рисунок с подписью
+	Table	Таблица
+	Table cell	Ячейка таблицы
+	Formula	Формула
+	Form field	Поле формы
+	Artifact: header	Артефакт: верхний колонтитул
+	Artifact: footer	Артефакт: нижний колонтитул
+	Artifact: background	Артефакт: фон
+	Form field tooltips	Подсказки полей формы
+	Paragraphs	Абзацы
+	Figures	Рисунки
+	Tags panel	Панель «Теги»
+	Order panel	Панель «Порядок»
+	Autotag document…	Автоматически расставить теги в документе…
+	Autotag form fields…	Автоматически расставить теги в полях формы…
+	Make accessible…	Сделать доступным…
+	Change reading order	Изменить порядок чтения
+	Change tag properties	Изменить свойства тега
+	Tag region	Разметить область
