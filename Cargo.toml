@@ -66,7 +66,7 @@ proptest = "1"
 # The design system shared by every craft app (tokens, theme, palette, toasts).
 craft-ui = { git = "https://github.com/treeforjs/craftworks", rev = "389c91ce90340b1e448bf7f8162bd58778253b6a", version = "0.1.0" }
 # In-app updates shared by the craft apps (check, download, verify, install on quit).
-craft-update = { git = "https://github.com/treeforjs/craftworks", rev = "8c52baa4c73e7fb8def81d19426a96005c814c12", version = "0.1.0", default-features = false }
+craft-update = { git = "https://github.com/treeforjs/craftworks", rev = "a057bf66b8caf197434cce4704b16d8af25c3953", version = "0.3.0", default-features = false }
 egui = "0.36"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { version = "0.36", default-features = false }

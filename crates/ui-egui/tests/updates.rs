@@ -126,7 +126,7 @@ fn a_newer_release_downloads_verifies_and_waits_for_quit() {
         return; // No 32-bit Linux AppImage exists to update to.
     }
     let dir = tempfile::tempdir().unwrap();
-    let target = dir.path().join("PdfCraft.AppImage");
+    let target = dir.path().canonicalize().unwrap().join("PdfCraft.AppImage");
     std::fs::write(&target, b"old").unwrap();
     let mut h = harness(github(Some("v99.0.0"), b"new"), InstallKind::AppImage(target.clone()), NO_AUTO);
     h.state_mut().execute("help.check_updates");
@@ -187,7 +187,7 @@ fn skipping_a_version_closes_and_remembers_it() {
 #[test]
 fn the_daily_check_waits_for_startup_and_only_notifies() {
     let source = github(Some("v99.0.0"), b"new");
-    let mut h = harness(source.clone(), InstallKind::WindowsMsi, "{}");
+    let mut h = harness(source.clone(), InstallKind::WindowsMsi, r#"{"updates":{"enabled":true}}"#);
     h.run_steps(5);
     assert_eq!(source.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "nothing is asked while the app starts");
     // Let the start-up delay pass on egui's clock.
@@ -211,7 +211,7 @@ fn the_daily_check_waits_for_startup_and_only_notifies() {
 #[test]
 fn a_recent_or_disabled_check_doesnt_run_again() {
     let now = craft_update::AutoCheck::now();
-    for settings in [NO_AUTO.to_string(), format!(r#"{{"updates":{{"last_checked":{now}}}}}"#)] {
+    for settings in [NO_AUTO.to_string(), format!(r#"{{"updates":{{"enabled":true,"last_checked":{now}}}}}"#)] {
         let source = github(Some("v99.0.0"), b"new");
         let mut h = harness(source.clone(), InstallKind::WindowsMsi, &settings);
         for _ in 0..20 {
@@ -220,4 +220,61 @@ fn a_recent_or_disabled_check_doesnt_run_again() {
         }
         assert_eq!(source.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "{settings}");
     }
+}
+
+#[test]
+fn background_requests_require_explicit_consent_in_saved_settings() {
+    for settings in
+        ["{}", r#"{"updates":{}}"#, r#"{"updates":{"skipped":"98.0.0"}}"#, r#"{"updates":{"enabled":false}}"#, r#"{"updates":{"enabled":"yes"}}"#]
+    {
+        let source = github(None, b"");
+        let mut h = harness(source.clone(), InstallKind::WindowsPortable, settings);
+        assert!(!h.state().auto_update_check().enabled, "{settings}");
+        for _ in 0..40 {
+            h.input_mut().time = Some(h.input().time.unwrap_or(0.0) + 1.0);
+            h.run_steps(1);
+        }
+        assert_eq!(source.asked.load(std::sync::atomic::Ordering::SeqCst), 0, "{settings}");
+        assert!(matches!(h.state().updater().map(Updater::state), Some(State::Idle)));
+        // A manual check works while background checks stay off.
+        h.state_mut().execute("help.check_updates");
+        settle(&mut h);
+        assert_eq!(source.asked.load(std::sync::atomic::Ordering::SeqCst), 1, "{settings}");
+        assert!(!h.state().auto_update_check().enabled);
+    }
+}
+
+#[test]
+fn an_explicit_update_choice_and_schedule_survive_restore() {
+    for enabled in [true, false] {
+        let settings = serde_json::json!({"updates":{"enabled":enabled,"last_checked":123,"skipped":"98.0.0"}});
+        let mut app = PdfCraftApp::new();
+        app.restore(&settings.to_string());
+        assert_eq!(app.auto_update_check().enabled, enabled);
+        assert_eq!(app.auto_update_check().last_checked, Some(123));
+        assert_eq!(app.auto_update_check().skipped.as_deref(), Some("98.0.0"));
+        let mut reopened = PdfCraftApp::new();
+        reopened.restore(&app.persist());
+        assert_eq!(reopened.auto_update_check(), app.auto_update_check());
+    }
+}
+
+#[test]
+fn an_update_changed_after_download_is_refused_before_installation() {
+    if craft_update::Arch::current() == craft_update::Arch::X86 {
+        return; // No 32-bit Linux AppImage exists to update to.
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().canonicalize().unwrap().join("PdfCraft.AppImage");
+    std::fs::write(&target, b"old").unwrap();
+    let mut h = harness(github(Some("v99.0.0"), b"new"), InstallKind::AppImage(target.clone()), NO_AUTO);
+    h.state_mut().execute("help.check_updates");
+    settle(&mut h);
+    h.get_by_label("Download and install").click();
+    settle(&mut h);
+    let prepared = h.state().updater().and_then(Updater::prepared).unwrap().clone();
+    // Same size as the signed payload: checking only its existence or length is insufficient.
+    std::fs::write(&prepared.file, b"bad").unwrap();
+    assert!(matches!(prepared.apply(false), Err(Error::Verify(_))));
+    assert_eq!(std::fs::read(&target).unwrap(), b"old", "a changed staged file must never replace the app");
 }

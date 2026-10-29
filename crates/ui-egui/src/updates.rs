@@ -6,7 +6,7 @@
 //!
 //! - The automatic check waits [`AutoCheck::START_DELAY_SECS`] after the first frame, runs on a
 //!   background thread at most once a day, and only ever shows a notice: never a dialog over
-//!   the user's work. Settings ▸ General turns it off.
+//!   the user's work. It is off by default; Settings ▸ General enables it.
 //! - A download is checked against the release's signed checksum list before it is kept, and is
 //!   installed when PdfCraft quits (after unsaved documents are handled) or on Restart now.
 
@@ -27,7 +27,6 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     matches!((craft_update::Version::parse(latest), craft_update::Version::parse(current)), (Some(l), Some(c)) if l > c)
 }
 
-#[derive(Default)]
 pub(crate) struct Updates {
     /// The Updates dialog is showing.
     pub(crate) open: bool,
@@ -43,6 +42,22 @@ pub(crate) struct Updates {
     checking: bool,
     /// Restart now was chosen: the new version opens after the update installs.
     restart: bool,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self {
+            open: false,
+            // The pinned shared updater defaults to on; this app requires opt-in.
+            auto: AutoCheck { enabled: false, last_checked: None, skipped: None },
+            #[cfg(not(target_arch = "wasm32"))]
+            updater: None,
+            started: None,
+            background: false,
+            checking: false,
+            restart: false,
+        }
+    }
 }
 
 impl PdfCraftApp {
@@ -133,7 +148,12 @@ impl PdfCraftApp {
     }
 
     pub(crate) fn restore_updates(&mut self, v: &serde_json::Value) {
-        if let Ok(auto) = serde_json::from_value::<AutoCheck>(v.clone()) {
+        let mut saved = v.clone();
+        if let Some(settings) = saved.as_object_mut() {
+            // Missing settings are not consent to start background requests.
+            settings.entry("enabled").or_insert(serde_json::Value::Bool(false));
+        }
+        if let Ok(auto) = serde_json::from_value::<AutoCheck>(saved) {
             self.updates.auto = auto;
         }
     }

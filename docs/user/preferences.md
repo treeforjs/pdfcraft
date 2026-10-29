@@ -10,7 +10,7 @@ Settings are saved for you and apply to every document. They are never written i
 - **Theme**: Light gray, Warm, Dim, Dark gray, or the system setting.
 - **Default workspace mode**: which tab (All tools, Read, Edit, Convert or E-Sign) documents open in.
 - **Reopen the files that were open when PdfCraft last closed**.
-- **Check for updates automatically**: a daily check that only shows a notice.
+- **Check for updates automatically**: off by default. Enabling it permits a daily check that only shows a notice. Manual checks remain available from Help. Existing saved choices are preserved.
 
 ## Documents
 

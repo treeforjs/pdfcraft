@@ -65,3 +65,91 @@ OpenGL can't start either, PdfCraft exits with both errors in the log. The fallb
 | `PDFCRAFT_RENDERER` | `gl` starts with OpenGL (glow) and never loads wgpu; `wgpu` reports a wgpu failure instead of retrying with OpenGL; unset, wgpu is retried with OpenGL when it can't start (see [Renderer fallback](#renderer-fallback)) |
 | `CRAFT_FONTS_DIR` | Build time: a [craft-fonts](https://github.com/storytold/craft-fonts) checkout to embed (Japanese fonts) |
 | `PDFCRAFT_SYSTEM_FONTS` | `0` stops the desktop app from using an installed font for characters its embedded fonts lack (`cargo xtask screenshots` sets it) |
+
+
+## Network and dependency review (2026-10-29)
+
+The source review covered PdfCraft, PhotoCraft, VectorCraft and the shared Craftworks launcher:
+first-party runtime network entry points, build scripts, packaging/workflow commands and all four
+Cargo lockfiles. No telemetry SDK integration or automatic document upload was identified in
+these reviewed paths. This is a scoped source review and advisory scan, not a guarantee that
+all dependency source, binaries or future changes are safe.
+
+The editors now pin the published hardened `craft-update` 0.3.0 revision
+`a057bf66b8caf197434cce4704b16d8af25c3953`. The old 0.1.0 pin lacked the shared library's
+private per-download staging, prepared-file ownership and install-time checksum revalidation;
+those protections were already implemented and tested in Craftworks but were not reaching the
+editors. A PdfCraft integration regression downloads a signed synthetic update, changes its
+staged bytes without changing its size, and checks that installation refuses it and preserves
+the old app. Both the consumed pinned source and the current shared source were reviewed.
+
+The editors default to **no automatic release checks**. Missing update settings, including a
+partial object without `enabled`, keep background checks off. Existing saved `enabled: true`
+values are preserved; older versions also saved that value by default, so an existing user who
+wants no background checks must turn it off in General settings. Manual Help checks still work.
+The updater sends a generic app/version User-Agent to `api.github.com`, then fetches requested
+release assets through GitHub. It does not attach document contents, identity preferences,
+recent-file lists or a machine identifier. Checks and downloads remain separate actions;
+signed checksums and hashes still gate installation.
+
+Other reviewed network surfaces:
+
+- PdfCraft's Submit Form sends selected form data or the PDF only from an explicit send action.
+  Timestamping and fetching OCSP/CRL evidence are explicit signing operations; they disclose
+  timestamp requests or certificate identifiers to their configured endpoints. Internet-access
+  policy, timeouts, size caps and no-redirect rules apply. Opening/validating a PDF does not
+  start these fetches. Document JavaScript has no network or filesystem host API.
+- The editors' browser builds load application/font resources from their hosting origin;
+  separately served craft-fonts faces use pinned Subresource Integrity. Hosting access logs
+  can therefore see normal resource requests. Desktop control servers are opt-in loopback
+  surfaces; they are not outbound telemetry. The reviewed plug-in hosts expose no networking.
+- Craftworks deliberately checks its own and the three editors' releases on launch. Changing
+  `AutoCheck` does not disable this separate launcher catalogue behavior. Its GET requests
+  disclose the requester IP and generic app/version to GitHub; no document or installed-app
+  inventory is posted by the reviewed release-check code.
+- Developer-only corpus/font downloads and release publishing are explicit build/maintenance
+  workflows. Source, attribution and repository links do not themselves trigger requests.
+- Adobe namespace addresses in XMP, XFDF and XFA are compatibility identifiers in the
+  reviewed reader/writer code. Those string literals do not fetch their named addresses.
+
+`cargo audit --file Cargo.lock --json` used RustSec database commit
+`ee1a49a2769a24a596afc1c20cb33748d2769586` (2026-10-29). Updates remove the applicable lockfile
+findings for crypto-bigint/ctutils, Tokio, rustls-webpki, ruzstd and Craftworks' zip dependency.
+Craftworks keeps its custom bounded extractor, link rejection and fixed output permissions
+when upgrading zip; it does not use the generic extract helpers named in the advisories.
+
+PdfCraft retains the already documented [RSA timing advisory](https://rustsec.org/advisories/RUSTSEC-2023-0071.html),
+which has no patched version: native private-key operations use aws-lc-rs; the browser's local,
+user-requested RSA signer uses blinding. This is not a claim of a fixed RSA implementation.
+Unmaintained transitive dependencies remain: zvariant/zvariant_derive/zbus_names in the editors,
+rustybuzz/ttf-parser in PhotoCraft and VectorCraft, paste in PhotoCraft, and ttf-parser in Craftworks.
+PdfCraft’s `cargo deny check` also passes its advisory exceptions, bans, licences and source policy; it warns that the Windows-only clipboard-win 5.4.1 lockfile version is yanked. Advisory scans do not detect every backdoor or prove author intent.
+
+A remaining hardening gap is VectorCraft's opt-in desktop control server:
+`apps/vectorcraft/src/control_server.rs` accepts loopback JSON requests without a bearer token.
+Its JSON/HTTP rejection and line/connection caps do not authenticate local clients. The MCP
+bridge also has no token handshake. This is an inbound local-control weakness, not evidence of
+an outbound callback; do not expose or use that port with untrusted local clients. PdfCraft and
+PhotoCraft have token-authenticated control channels. Adding compatible token support to
+VectorCraft's host, MCP bridge and clients remains follow-up work.
+
+
+## Optional workstation CI runners
+
+The 2026-10-29 local setup registers one repository-scoped GitHub Actions runner for each of
+the four family repositories. Workflows can request `[self-hosted, Linux, X64, craft-local]`;
+existing hosted workflows are unchanged. The boot-enabled user services are
+`craft-actions-{pdfcraft,photocraft,vectorcraft,craftworks}.service`. The local operator notes
+are in `~/.local/share/craft-actions/README.txt`.
+
+All four services share `craft-ci.slice`: at most one logical CPU combined, lowest CPU/IO
+weights, nice 19, idle disk scheduling, a 4 GiB memory high-water mark and 6 GiB hard cap.
+Cargo builds, Rayon and Rust test concurrency default to one. Performance measurements on
+this runner are unsuitable for raising parity or performance claims while simulations run.
+Each runner has a separate filesystem/process sandbox without the user's home, live project
+folders or desktop credential sockets; Rust tools and the pre-job admission hook are read-only.
+Networking is shared with the host. The hook admits only owner-triggered push, schedule or
+manual jobs for the four repositories, and refuses PR jobs and other actors. The services use
+GitHub's official `runsvc.sh` entry point and reconnect after network failures. Registration,
+service restart, sandbox boundaries and admission cases were checked; no physical reboot or
+GitHub workflow job was part of that setup verification.
